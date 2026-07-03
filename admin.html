@@ -254,32 +254,6 @@
 <title>總覽彙整 — 藝師藝有計畫 115學年度</title>
 </head>
 <body>
-<div class="toast" id="toast"></div>
-<div class="modal-overlay" id="editReasonModal" style="display:none;">
-  <div class="modal-box">
-    <h3>修改原因</h3>
-    <p class="help-text" style="margin-top:0;">這筆資料已經儲存過。請說明這次修改的原因，方便主辦方追蹤異動內容。</p>
-    <div class="quick-reason-row">
-      <label><input type="checkbox" class="quickReasonChk" value="學校有活動">學校有活動</label>
-      <label><input type="checkbox" class="quickReasonChk" value="師資時間安排">師資時間安排</label>
-      <label><input type="checkbox" class="quickReasonChk" value="教師生病">教師生病</label>
-      <label><input type="checkbox" class="quickReasonChk" value="表單填錯">表單填錯</label>
-      <label><input type="checkbox" class="quickReasonChk" value="其它">其它</label>
-    </div>
-    <textarea id="editReasonInput" rows="3" placeholder="例：因學校有安排○○活動，固需調整課程期程"></textarea>
-    <div class="btn-row" style="justify-content:flex-end; margin-top:14px;">
-      <button class="btn btn-ghost" id="editReasonCancelBtn">取消</button>
-      <button class="btn btn-primary" id="editReasonConfirmBtn">確認修改</button>
-    </div>
-  </div>
-<div class="modal-overlay" id="confirmModal" style="display:none;">
-  <div class="modal-box">
-    <p id="confirmModalText" style="margin:0 0 16px; white-space:pre-line; line-height:1.7;"></p>
-    <div class="btn-row" style="justify-content:flex-end;">
-      <button class="btn btn-ghost" id="confirmModalCancelBtn">取消</button>
-      <button class="btn btn-primary" id="confirmModalOkBtn">確認</button>
-    </div>
-  </div>
 <div class="layout"><div class="main">
   <div class="top-bar"><div class="brand">教育部 · 藝師藝有計畫 115學年度 · 總覽彙整</div></div>
   <div id="loading" class="loading-msg">載入資料中…</div>
@@ -474,7 +448,7 @@ async function getSchool(schoolId) {
 }
 
 async function getAllSchools() {
-  return await sbFetch('/schools?select=*&order=id');
+  return await sbFetch('/schools?select=*&order=id.asc');
 }
 
 async function updateSchool(schoolId, patch) {
@@ -488,12 +462,12 @@ async function updateSchool(schoolId, patch) {
 
 async function getSessionsBySchool(schoolId) {
   return await sbFetch(
-    `/sessions?school_id=eq.${schoolId}&select=*&order=date,start_time`
+    `/sessions?school_id=eq.${schoolId}&select=*&order=date.asc,start_time.asc`
   );
 }
 
 async function getAllSessions() {
-  return await sbFetch('/sessions?select=*&order=date,start_time');
+  return await sbFetch('/sessions?select=*&order=date.asc,start_time.asc');
 }
 
 async function upsertSession(session) {
@@ -920,9 +894,8 @@ $$('.tab-btn').forEach(btn=>{
 /* ---------------- fill panel ---------------- */
 
 function refreshSchoolSelectOptions(){
-  const cp = $('#categoryPicker'), sel = $('#schoolSelect');
-  if(!cp || !sel) return;
-  const cat = cp.value;
+  const cat = $('#categoryPicker').value;
+  const sel = $('#schoolSelect');
   sel.innerHTML = buildSchoolOptionsHTML(cat, {allLabel:'請選擇…', useId:true});
   sel.value = '';
 }
@@ -2725,14 +2698,17 @@ async function loadData(){
     const bySchool = {};
     (sessions||[]).forEach(s=>{ (bySchool[s.school_id]=bySchool[s.school_id]||[]).push(s); });
     DATA.schools = (schools||[]).map(sc => schoolRowToObj(sc, bySchool[sc.id]||[]));
-    const logs = await getChangeLogs(false);
-    DATA.changeLog = (logs||[]).map(r=>({
-      id:r.id, schoolId:r.school_id, schoolName:r.school_name, sessionId:r.session_id,
-      isBasicInfo:r.is_basic_info, timestamp:r.timestamp, reason:r.reason,
-      deleted:r.deleted, acknowledged:r.acknowledged,
-      before:r.before_data, after:r.after_data,
-      hadVisitConflict:r.had_visit_conflict, visitFlagsAtChange:r.visit_flags_at_change
-    }));
+    // change_log 單獨處理，失敗不影響學校資料顯示
+    try{
+      const logs = await getChangeLogs(false);
+      DATA.changeLog = (logs||[]).map(r=>({
+        id:r.id, schoolId:r.school_id, schoolName:r.school_name, sessionId:r.session_id,
+        isBasicInfo:r.is_basic_info, timestamp:r.timestamp, reason:r.reason,
+        deleted:r.deleted, acknowledged:r.acknowledged,
+        before:r.before_data, after:r.after_data,
+        hadVisitConflict:r.had_visit_conflict, visitFlagsAtChange:r.visit_flags_at_change
+      }));
+    }catch(e){ console.error('changeLog load error', e); DATA.changeLog = []; }
   }
 }
 
