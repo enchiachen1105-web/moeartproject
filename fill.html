@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課程期程表填寫 — 藝師藝有計畫 115學年度</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -250,9 +250,9 @@
 
   .loading-msg{text-align:center; padding:60px 0; color:var(--ink-faint); font-size:13.5px;}
 
-/* 填表頁隱藏 tabs */
 .tabs{ display:none !important; }
 </style>
+<title>課程期程表填寫 — 藝師藝有計畫 115學年度</title>
 </head>
 <body>
 <div class="toast" id="toast"></div>
@@ -281,18 +281,16 @@
       <button class="btn btn-primary" id="confirmModalOkBtn">確認</button>
     </div>
   </div>
-
 <div class="layout">
-  <div class="sidebar" style="display:none;"></div>
   <div class="main">
     <div class="top-bar">
       <div class="brand">教育部 · 藝師藝有計畫 115學年度</div>
     </div>
     <div id="loading" class="loading-msg">載入資料中…</div>
     <div id="content" style="display:none;">
-      <div id="schoolNameBanner" class="card" style="margin-bottom:0; padding:14px 20px; display:flex; align-items:center; gap:12px;">
+      <div class="card" style="margin-bottom:0;padding:14px 20px;display:flex;align-items:center;gap:12px;">
         <span id="bannerCategory" class="badge"></span>
-        <span id="bannerName" style="font-size:17px; font-weight:700;"></span>
+        <span id="bannerName" style="font-size:17px;font-weight:700;"></span>
       </div>
       <div class="card">
         <div class="card-title"><span class="num">1</span>選擇學校</div>
@@ -428,15 +426,12 @@
     </div>
   </div>
 </div>
-
 <script>
-// ── 從 URL 取得學校 ID (/fill/school-01 → 'school-01') ──
 const SCHOOL_ID = (function(){
   const parts = location.pathname.split('/');
   const idx = parts.indexOf('fill');
-  return idx !== -1 ? parts[idx+1] : '';
+  return idx !== -1 ? (parts[idx+1] || '') : '';
 })();
-
 // ============================================================
 // supabase.js — 所有資料庫操作集中在這裡
 // 部署前請把 SUPABASE_URL 和 SUPABASE_ANON_KEY 換成您的實際值
@@ -544,6 +539,187 @@ async function acknowledgeChangeLog(id) {
 }
 
 
+/* ── Supabase 版 loadData / saveData ────────────────── */
+
+async function loadData() {
+  // fill.html: 只載入當前學校；admin.html: 載入全部
+  if (typeof SCHOOL_ID !== 'undefined' && SCHOOL_ID) {
+    try {
+      const school = await getSchool(SCHOOL_ID);
+      if (!school) { showToast('找不到此學校資料，請確認連結是否正確'); return; }
+      const sessions = await getSessionsBySchool(SCHOOL_ID);
+      // 把 Supabase 的 row 格式組成 Part1 相容的 DATA 結構
+      DATA.schools = [{
+        id: school.id,
+        name: school.name,
+        category: school.category,
+        region: school.region,
+        county: school.county,
+        targetHours: school.target_hours,
+        collaboratingArtists: school.collaborating_artists || [],
+        companionTeachers: school.companion_teachers || [],
+        studentGroups: school.student_groups || [],
+        contactTeacher: school.contact_teacher || '',
+        contactPhone: school.contact_phone || '',
+        basicInfoLocked: school.basic_info_locked || false,
+        sessions: (sessions || []).map(dbRowToSession),
+        updatedAt: school.updated_at
+      }];
+    } catch(e) {
+      console.error('loadData error', e);
+      showToast('載入資料失敗：' + e.message);
+    }
+  } else {
+    // admin 模式：載入全部學校 + 所有場次
+    try {
+      const schools = await getAllSchools();
+      const sessions = await getAllSessions();
+      const sessionsBySchool = {};
+      (sessions || []).forEach(s => {
+        (sessionsBySchool[s.school_id] = sessionsBySchool[s.school_id] || []).push(s);
+      });
+      DATA.schools = (schools || []).map(school => ({
+        id: school.id,
+        name: school.name,
+        category: school.category,
+        region: school.region,
+        county: school.county,
+        targetHours: school.target_hours,
+        collaboratingArtists: school.collaborating_artists || [],
+        companionTeachers: school.companion_teachers || [],
+        studentGroups: school.student_groups || [],
+        contactTeacher: school.contact_teacher || '',
+        contactPhone: school.contact_phone || '',
+        basicInfoLocked: school.basic_info_locked || false,
+        sessions: (sessionsBySchool[school.id] || []).map(dbRowToSession),
+        updatedAt: school.updated_at
+      }));
+      // 載入異動紀錄
+      const logs = await getChangeLogs(false);
+      DATA.changeLog = (logs || []).map(r => ({
+        id: r.id,
+        schoolId: r.school_id,
+        schoolName: r.school_name,
+        sessionId: r.session_id,
+        isBasicInfo: r.is_basic_info,
+        timestamp: r.timestamp,
+        reason: r.reason,
+        deleted: r.deleted,
+        acknowledged: r.acknowledged,
+        before: r.before_data,
+        after: r.after_data,
+        hadVisitConflict: r.had_visit_conflict,
+        visitFlagsAtChange: r.visit_flags_at_change
+      }));
+    } catch(e) {
+      console.error('loadData admin error', e);
+      showToast('載入資料失敗：' + e.message);
+    }
+  }
+}
+
+function dbRowToSession(r) {
+  return {
+    id: r.id,
+    semester: r.semester,
+    date: r.date,
+    startTime: r.start_time,
+    endTime: r.end_time,
+    companionTeacher: r.companion_teacher || '',
+    instructor: r.instructor || '',
+    studentGrades: r.student_grades || [],
+    location: r.location || '',
+    content: r.content || '',
+    visitPlanned: r.visit_planned || false,
+    visitConfirmed: r.visit_confirmed || false,
+    visitSuyu: r.visit_suyu || false,
+    visitEnjia: r.visit_enjia || false,
+    visitCommittee: r.visit_committee || false,
+    locked: r.locked || false
+  };
+}
+
+async function saveData() {
+  const school = DATA.schools[0] || (typeof currentSchoolId !== 'undefined'
+    ? DATA.schools.find(s => s.id === currentSchoolId) : null);
+  if (!school) return false;
+  try {
+    // 更新學校基本資料
+    await updateSchool(school.id, {
+      collaborating_artists: school.collaboratingArtists,
+      companion_teachers: school.companionTeachers,
+      student_groups: school.studentGroups,
+      contact_teacher: school.contactTeacher,
+      contact_phone: school.contactPhone,
+      basic_info_locked: school.basicInfoLocked,
+      updated_at: new Date().toISOString()
+    });
+
+    // 取得目前資料庫裡的場次 ID 清單，刪除已被移除的場次
+    const existingRows = await getSessionsBySchool(school.id);
+    const existingIds  = (existingRows || []).map(r => r.id);
+    const keepIds      = school.sessions.map(s => s.id);
+    const toDelete     = existingIds.filter(id => !keepIds.includes(id));
+    for (const id of toDelete) await deleteSession(id);
+
+    // Upsert 所有場次
+    if (school.sessions.length > 0) {
+      const rows = school.sessions.map((s, i) => ({
+        id: s.id,
+        school_id: school.id,
+        semester: s.semester || '',
+        date: s.date || null,
+        start_time: s.startTime || null,
+        end_time: s.endTime || null,
+        companion_teacher: s.companionTeacher || '',
+        instructor: s.instructor || '',
+        student_grades: s.studentGrades || [],
+        location: s.location || '',
+        content: s.content || '',
+        visit_planned: !!s.visitPlanned,
+        visit_confirmed: !!s.visitConfirmed,
+        visit_suyu: !!s.visitSuyu,
+        visit_enjia: !!s.visitEnjia,
+        visit_committee: !!s.visitCommittee,
+        locked: !!s.locked,
+        sort_order: i
+      }));
+      await upsertSessions(rows);
+    }
+
+    // 寫入異動紀錄（如果有新增的）
+    if (Array.isArray(DATA.changeLog)) {
+      const existingLogs = await getChangeLogs(false);
+      const existingLogIds = new Set((existingLogs || []).map(l => l.id));
+      const newLogs = DATA.changeLog.filter(l => !existingLogIds.has(l.id));
+      for (const l of newLogs) {
+        await insertChangeLog({
+          id: l.id,
+          school_id: l.schoolId,
+          school_name: l.schoolName || '',
+          session_id: l.sessionId || null,
+          is_basic_info: !!l.isBasicInfo,
+          timestamp: l.timestamp,
+          reason: l.reason || '',
+          deleted: !!l.deleted,
+          acknowledged: !!l.acknowledged,
+          before_data: l.before || null,
+          after_data: l.after || null,
+          had_visit_conflict: !!l.hadVisitConflict,
+          visit_flags_at_change: l.visitFlagsAtChange || null
+        });
+      }
+    }
+    return true;
+  } catch(e) {
+    console.error('saveData error', e);
+    showToast('⚠️ 儲存失敗：' + e.message);
+    return false;
+  }
+}
+
+
+
 (function(){
 
 // 115學年度計畫期程：2026.08.01 - 2027.07.31
@@ -611,15 +787,15 @@ function closeEditReasonModal(){
   $('#editReasonModal').style.display = 'none';
   _editReasonCallback = null;
 }
-$('#editReasonCancelBtn').addEventListener('click', closeEditReasonModal);
-$('#editReasonConfirmBtn').addEventListener('click', ()=>{
+$('#editReasonCancelBtn')&&$('#editReasonCancelBtn').addEventListener('click', closeEditReasonModal);
+$('#editReasonConfirmBtn')&&$('#editReasonConfirmBtn').addEventListener('click', ()=>{
   const reason = $('#editReasonInput').value.trim();
   if(!reason){ showToast('請填寫修改原因'); return; }
   const cb = _editReasonCallback;
   closeEditReasonModal();
   if(cb) cb(reason);
 });
-$('#editReasonModal').addEventListener('click', (e)=>{
+$('#editReasonModal')&&$('#editReasonModal').addEventListener('click', (e)=>{
   if(e.target.id === 'editReasonModal') closeEditReasonModal();
 });
 
@@ -651,13 +827,13 @@ function closeConfirmModal(){
   $('#confirmModal').style.display = 'none';
   _confirmCallback = null;
 }
-$('#confirmModalCancelBtn').addEventListener('click', closeConfirmModal);
-$('#confirmModalOkBtn').addEventListener('click', ()=>{
+$('#confirmModalCancelBtn')&&$('#confirmModalCancelBtn').addEventListener('click', closeConfirmModal);
+$('#confirmModalOkBtn')&&$('#confirmModalOkBtn').addEventListener('click', ()=>{
   const cb = _confirmCallback;
   closeConfirmModal();
   if(cb) cb();
 });
-$('#confirmModal').addEventListener('click', (e)=>{
+$('#confirmModal')&&$('#confirmModal').addEventListener('click', (e)=>{
   if(e.target.id === 'confirmModal') closeConfirmModal();
 });
 
@@ -926,7 +1102,7 @@ function refreshSchoolSelectOptions(){
   sel.value = '';
 }
 
-$('#categoryPicker').addEventListener('change', ()=>{
+$('#categoryPicker')&&$('#categoryPicker').addEventListener('change', ()=>{
   if(currentSchoolId){
     // A school is already selected — category is just a read-out for it,
     // not an active filter, so snap it back rather than disrupting the form.
@@ -1034,11 +1210,11 @@ function renderSimpleListSection(key, values, unitLabel, emptyText){
   applyBasicInfoFieldLock();
 }
 
-$('#addArtistBtn').addEventListener('click', ()=>{
+$('#addArtistBtn')&&$('#addArtistBtn').addEventListener('click', ()=>{
   $('#artistsRows').appendChild(buildSimpleListRow('artists', ''));
   refreshSimpleListSummary('artists');
 });
-$('#addTeacherBtn').addEventListener('click', ()=>{
+$('#addTeacherBtn')&&$('#addTeacherBtn').addEventListener('click', ()=>{
   $('#teachersRows').appendChild(buildSimpleListRow('teachers', ''));
   refreshSimpleListSummary('teachers');
 });
@@ -1108,7 +1284,7 @@ function renderStudentGroupsSection(groups){
   applyBasicInfoFieldLock();
 }
 
-$('#addStudentGroupBtn').addEventListener('click', ()=>{
+$('#addStudentGroupBtn')&&$('#addStudentGroupBtn').addEventListener('click', ()=>{
   $('#studentsRows').appendChild(buildStudentGroupRow(null));
   refreshStudentsSummary();
   refreshSessionGradeOptions();
@@ -1139,14 +1315,14 @@ function setBasicInfoLockState(locked){
   applyBasicInfoFieldLock();
 }
 
-$('#basicInfoEditBtn').addEventListener('click', ()=>{
+$('#basicInfoEditBtn')&&$('#basicInfoEditBtn').addEventListener('click', ()=>{
   openEditReasonModal((reason)=>{
     currentBasicInfoEditReason = reason;
     setBasicInfoLockState(false);
     showToast('已解鎖學校基本資料，修改完成後記得儲存');
   });
 });
-$('#basicInfoSaveBtn').addEventListener('click', ()=>{
+$('#basicInfoSaveBtn')&&$('#basicInfoSaveBtn').addEventListener('click', ()=>{
   openConfirmModal('確認儲存學校基本資料的修改？', async ()=>{
     if(!currentSchoolRef){ showToast('找不到此學校資料，請重新整理頁面後再試'); return; }
     await commitSaveSchool(currentSchoolRef);
@@ -1418,13 +1594,13 @@ function applySessionMonthFilter(){
 /* ---- cal view mode & tab sync ---- */
 function isCalMode(){ return $('#sessionCalWrap').style.display !== 'none'; }
 
-$('#sessionListViewBtn').addEventListener('click', ()=>{
+$('#sessionListViewBtn')&&$('#sessionListViewBtn').addEventListener('click', ()=>{
   $('#sessionListViewBtn').classList.add('active');
   $('#sessionCalViewBtn').classList.remove('active');
   $('#sessionListWrap').style.display = 'block';
   $('#sessionCalWrap').style.display = 'none';
 });
-$('#sessionCalViewBtn').addEventListener('click', ()=>{
+$('#sessionCalViewBtn')&&$('#sessionCalViewBtn').addEventListener('click', ()=>{
   $('#sessionCalViewBtn').classList.add('active');
   $('#sessionListViewBtn').classList.remove('active');
   $('#sessionListWrap').style.display = 'none';
@@ -1450,7 +1626,7 @@ function syncCalToMonthFilter(){
 
 let formCalYear, formCalMonth;
 
-$('#schoolCalPrev').addEventListener('click', ()=>{
+$('#schoolCalPrev')&&$('#schoolCalPrev').addEventListener('click', ()=>{
   if(formCalYear*12+formCalMonth <= PROGRAM_START.y*12+PROGRAM_START.m) return;
   formCalMonth--; if(formCalMonth<0){formCalMonth=11;formCalYear--;}
   // sync active month tab
@@ -1459,7 +1635,7 @@ $('#schoolCalPrev').addEventListener('click', ()=>{
   renderMonthFilterRow();
   renderSchoolMiniCalendar();
 });
-$('#schoolCalNext').addEventListener('click', ()=>{
+$('#schoolCalNext')&&$('#schoolCalNext').addEventListener('click', ()=>{
   if(formCalYear*12+formCalMonth >= PROGRAM_END.y*12+PROGRAM_END.m) return;
   formCalMonth++; if(formCalMonth>11){formCalMonth=0;formCalYear++;}
   const mKey = `${formCalYear}-${String(formCalMonth+1).padStart(2,'0')}`;
@@ -1673,7 +1849,7 @@ function refreshHoursBar(actual){
   $('#hoursActual').style.color = actualVal >= target ? '#1E7D3A' : '#C0392B';
 }
 
-$('#addSessionBtn').addEventListener('click', ()=>{
+$('#addSessionBtn')&&$('#addSessionBtn').addEventListener('click', ()=>{
   if(activeMonthFilter !== 'all'){
     const [y,m] = activeMonthFilter.split('-').map(Number);
     const monthInfo = FORM_MONTHS.find(fm=>fm.y===y && fm.m===m);
@@ -1704,7 +1880,7 @@ function logBasicInfoChange(schoolId, reason, before, after){
   if(DATA.changeLog.length > 200) DATA.changeLog.length = 200;
 }
 
-$('#saveBtn').addEventListener('click', ()=>{
+$('#saveBtn')&&$('#saveBtn').addEventListener('click', ()=>{
   if(!currentSchoolId){ showToast('請先選擇學校'); return; }
   const school = DATA.schools.find(s=>s.id===currentSchoolId);
   if(!school){ showToast('找不到此學校資料，請重新整理頁面後再試'); return; }
@@ -2205,7 +2381,7 @@ async function renderChangeLog(){
   });
 }
 
-$('#changeLogShowAllBtn').addEventListener('click', ()=>{
+$('#changeLogShowAllBtn')&&$('#changeLogShowAllBtn').addEventListener('click', ()=>{
   changeLogShowAll = !changeLogShowAll;
   renderChangeLog();
 });
@@ -2239,12 +2415,12 @@ function refreshAdminSchoolNameOptions(){
   sel.value = (prevVal && stillExists) ? prevVal : '';
 }
 
-$('#categoryFilter').addEventListener('change', ()=>{
+$('#categoryFilter')&&$('#categoryFilter').addEventListener('change', ()=>{
   refreshAdminSchoolNameOptions();
   renderAdmin();
 });
-$('#schoolNameFilter').addEventListener('change', renderAdmin);
-$('#semesterFilter').addEventListener('change', renderAdmin);
+$('#schoolNameFilter')&&$('#schoolNameFilter').addEventListener('change', renderAdmin);
+$('#semesterFilter')&&$('#semesterFilter').addEventListener('change', renderAdmin);
 
 function matchesFilter(ev){
   const schoolName = $('#schoolNameFilter').value;
@@ -2291,7 +2467,7 @@ function renderListView(){
 
 // One-time delegated listener: handles every visit checkbox in the list,
 // including rows re-rendered later, since it's bound to the table body itself.
-$('#listTbody').addEventListener('change', (e)=>{
+$('#listTbody')&&$('#listTbody').addEventListener('change', (e)=>{
   const t = e.target;
   if(!t.matches || !t.matches('input[type=checkbox][data-field]')) return;
   const school = DATA.schools.find(s=>s.id===t.dataset.schoolId);
@@ -2354,7 +2530,7 @@ function syncAdminCalToMonthFilter(){
   }
 }
 
-$('#viewListBtn').addEventListener('click', ()=>{
+$('#viewListBtn')&&$('#viewListBtn').addEventListener('click', ()=>{
   activeView = 'list';
   $('#viewListBtn').classList.add('active');
   $('#viewCalBtn').classList.remove('active');
@@ -2362,7 +2538,7 @@ $('#viewListBtn').addEventListener('click', ()=>{
   $('#calView').style.display='none';
   renderListView();
 });
-$('#viewCalBtn').addEventListener('click', ()=>{
+$('#viewCalBtn')&&$('#viewCalBtn').addEventListener('click', ()=>{
   activeView = 'cal';
   $('#viewCalBtn').classList.add('active');
   $('#viewListBtn').classList.remove('active');
@@ -2374,7 +2550,7 @@ $('#viewCalBtn').addEventListener('click', ()=>{
 
 let monthListFilter = 'all';
 
-$('#calPrev').addEventListener('click', ()=>{
+$('#calPrev')&&$('#calPrev').addEventListener('click', ()=>{
   if(calYear*12+calMonth <= PROGRAM_START.y*12+PROGRAM_START.m) return;
   calMonth--; if(calMonth<0){calMonth=11;calYear--;}
   selectedDayKey = null;
@@ -2383,7 +2559,7 @@ $('#calPrev').addEventListener('click', ()=>{
   renderCalendar();
   renderMonthList();
 });
-$('#calNext').addEventListener('click', ()=>{
+$('#calNext')&&$('#calNext').addEventListener('click', ()=>{
   if(calYear*12+calMonth >= PROGRAM_END.y*12+PROGRAM_END.m) return;
   calMonth++; if(calMonth>11){calMonth=0;calYear++;}
   selectedDayKey = null;
@@ -2583,8 +2759,8 @@ function renderMonthList(){
   }).join('');
 }
 
-$('#monthListAllBtn').addEventListener('click', ()=>{ monthListFilter='all'; renderMonthList(); });
-$('#monthListConfirmedBtn').addEventListener('click', ()=>{ monthListFilter='confirmed'; renderMonthList(); });
+$('#monthListAllBtn')&&$('#monthListAllBtn').addEventListener('click', ()=>{ monthListFilter='all'; renderMonthList(); });
+$('#monthListConfirmedBtn')&&$('#monthListConfirmedBtn').addEventListener('click', ()=>{ monthListFilter='confirmed'; renderMonthList(); });
 
 /* ---------------- export ---------------- */
 
@@ -2717,20 +2893,19 @@ init();
 
 })();
 
-
-// 載入後顯示學校名稱 banner
+// Banner
 (function(){
   const orig = window.loadFormFor;
+  if(!orig) return;
   window.loadFormFor = function(school){
     if(school){
-      const banner = document.getElementById('bannerName');
-      const cat    = document.getElementById('bannerCategory');
-      if(banner) banner.textContent = school.name;
-      if(cat){
-        cat.textContent = school.category;
-        const colors = {'音樂班':'#B33A3A','舞蹈班':'#D1722F','美術班':'#C9A227','普通班':'#8C5A3C'};
-        cat.style.background = colors[school.category] || '#888';
-        cat.style.color = '#fff';
+      const bn = document.getElementById('bannerName');
+      const bc = document.getElementById('bannerCategory');
+      if(bn) bn.textContent = school.name;
+      if(bc){
+        bc.textContent = school.category;
+        const c={'音樂班':'#B33A3A','舞蹈班':'#D1722F','美術班':'#C9A227','普通班':'#8C5A3C'};
+        bc.style.background = c[school.category]||'#888'; bc.style.color='#fff';
       }
     }
     return orig.apply(this, arguments);
