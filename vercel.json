@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/fill/:schoolId", "destination": "/fill.html" },
+    { "source": "/admin",          "destination": "/admin.html" },
+    { "source": "/",               "destination": "/index.html" }
+  ]
+}
