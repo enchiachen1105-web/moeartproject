@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -250,7 +249,7 @@
 
   .loading-msg{text-align:center; padding:60px 0; color:var(--ink-faint); font-size:13.5px;}
 
-.tabs{ display:none !important; }
+.tabs{display:none !important;}
 </style>
 <title>總覽彙整 — 藝師藝有計畫 115學年度</title>
 </head>
@@ -281,14 +280,11 @@
       <button class="btn btn-primary" id="confirmModalOkBtn">確認</button>
     </div>
   </div>
-<div class="layout">
-  <div class="main">
-    <div class="top-bar">
-      <div class="brand">教育部 · 藝師藝有計畫 115學年度 · 總覽彙整</div>
-    </div>
-    <div id="loading" class="loading-msg">載入資料中…</div>
-    <div id="content" style="display:none;">
-      <div class="stat-row">
+<div class="layout"><div class="main">
+  <div class="top-bar"><div class="brand">教育部 · 藝師藝有計畫 115學年度 · 總覽彙整</div></div>
+  <div id="loading" class="loading-msg">載入資料中…</div>
+  <div id="content" style="display:none;">
+    <div class="stat-row">
         <div class="stat-box"><div class="v" id="statSchools">0 / 32</div><div class="l">已填表學校數</div></div>
         <div class="stat-box"><div class="v" id="statVisitedS1">0 / 32</div><div class="l">上學期已訪視校次</div></div>
         <div class="stat-box"><div class="v" id="statVisitedS2">0 / 32</div><div class="l">下學期已訪視校次</div></div>
@@ -437,10 +433,10 @@
       <button class="btn btn-primary" id="confirmModalOkBtn">確認</button>
     </div>
   </div>
-    </div>
   </div>
-</div>
+</div></div>
 <script>
+(function(){
 const SCHOOL_ID = '';
 // ============================================================
 // supabase.js — 所有資料庫操作集中在這裡
@@ -549,188 +545,6 @@ async function acknowledgeChangeLog(id) {
 }
 
 
-/* ── Supabase 版 loadData / saveData ────────────────── */
-
-async function loadData() {
-  // fill.html: 只載入當前學校；admin.html: 載入全部
-  if (typeof SCHOOL_ID !== 'undefined' && SCHOOL_ID) {
-    try {
-      const school = await getSchool(SCHOOL_ID);
-      if (!school) { showToast('找不到此學校資料，請確認連結是否正確'); return; }
-      const sessions = await getSessionsBySchool(SCHOOL_ID);
-      // 把 Supabase 的 row 格式組成 Part1 相容的 DATA 結構
-      DATA.schools = [{
-        id: school.id,
-        name: school.name,
-        category: school.category,
-        region: school.region,
-        county: school.county,
-        targetHours: school.target_hours,
-        collaboratingArtists: school.collaborating_artists || [],
-        companionTeachers: school.companion_teachers || [],
-        studentGroups: school.student_groups || [],
-        contactTeacher: school.contact_teacher || '',
-        contactPhone: school.contact_phone || '',
-        basicInfoLocked: school.basic_info_locked || false,
-        sessions: (sessions || []).map(dbRowToSession),
-        updatedAt: school.updated_at
-      }];
-    } catch(e) {
-      console.error('loadData error', e);
-      showToast('載入資料失敗：' + e.message);
-    }
-  } else {
-    // admin 模式：載入全部學校 + 所有場次
-    try {
-      const schools = await getAllSchools();
-      const sessions = await getAllSessions();
-      const sessionsBySchool = {};
-      (sessions || []).forEach(s => {
-        (sessionsBySchool[s.school_id] = sessionsBySchool[s.school_id] || []).push(s);
-      });
-      DATA.schools = (schools || []).map(school => ({
-        id: school.id,
-        name: school.name,
-        category: school.category,
-        region: school.region,
-        county: school.county,
-        targetHours: school.target_hours,
-        collaboratingArtists: school.collaborating_artists || [],
-        companionTeachers: school.companion_teachers || [],
-        studentGroups: school.student_groups || [],
-        contactTeacher: school.contact_teacher || '',
-        contactPhone: school.contact_phone || '',
-        basicInfoLocked: school.basic_info_locked || false,
-        sessions: (sessionsBySchool[school.id] || []).map(dbRowToSession),
-        updatedAt: school.updated_at
-      }));
-      // 載入異動紀錄
-      const logs = await getChangeLogs(false);
-      DATA.changeLog = (logs || []).map(r => ({
-        id: r.id,
-        schoolId: r.school_id,
-        schoolName: r.school_name,
-        sessionId: r.session_id,
-        isBasicInfo: r.is_basic_info,
-        timestamp: r.timestamp,
-        reason: r.reason,
-        deleted: r.deleted,
-        acknowledged: r.acknowledged,
-        before: r.before_data,
-        after: r.after_data,
-        hadVisitConflict: r.had_visit_conflict,
-        visitFlagsAtChange: r.visit_flags_at_change
-      }));
-    } catch(e) {
-      console.error('loadData admin error', e);
-      showToast('載入資料失敗：' + e.message);
-    }
-  }
-}
-
-function dbRowToSession(r) {
-  return {
-    id: r.id,
-    semester: r.semester,
-    date: r.date,
-    startTime: r.start_time,
-    endTime: r.end_time,
-    companionTeacher: r.companion_teacher || '',
-    instructor: r.instructor || '',
-    studentGrades: r.student_grades || [],
-    location: r.location || '',
-    content: r.content || '',
-    visitPlanned: r.visit_planned || false,
-    visitConfirmed: r.visit_confirmed || false,
-    visitSuyu: r.visit_suyu || false,
-    visitEnjia: r.visit_enjia || false,
-    visitCommittee: r.visit_committee || false,
-    locked: r.locked || false
-  };
-}
-
-async function saveData() {
-  const school = DATA.schools[0] || (typeof currentSchoolId !== 'undefined'
-    ? DATA.schools.find(s => s.id === currentSchoolId) : null);
-  if (!school) return false;
-  try {
-    // 更新學校基本資料
-    await updateSchool(school.id, {
-      collaborating_artists: school.collaboratingArtists,
-      companion_teachers: school.companionTeachers,
-      student_groups: school.studentGroups,
-      contact_teacher: school.contactTeacher,
-      contact_phone: school.contactPhone,
-      basic_info_locked: school.basicInfoLocked,
-      updated_at: new Date().toISOString()
-    });
-
-    // 取得目前資料庫裡的場次 ID 清單，刪除已被移除的場次
-    const existingRows = await getSessionsBySchool(school.id);
-    const existingIds  = (existingRows || []).map(r => r.id);
-    const keepIds      = school.sessions.map(s => s.id);
-    const toDelete     = existingIds.filter(id => !keepIds.includes(id));
-    for (const id of toDelete) await deleteSession(id);
-
-    // Upsert 所有場次
-    if (school.sessions.length > 0) {
-      const rows = school.sessions.map((s, i) => ({
-        id: s.id,
-        school_id: school.id,
-        semester: s.semester || '',
-        date: s.date || null,
-        start_time: s.startTime || null,
-        end_time: s.endTime || null,
-        companion_teacher: s.companionTeacher || '',
-        instructor: s.instructor || '',
-        student_grades: s.studentGrades || [],
-        location: s.location || '',
-        content: s.content || '',
-        visit_planned: !!s.visitPlanned,
-        visit_confirmed: !!s.visitConfirmed,
-        visit_suyu: !!s.visitSuyu,
-        visit_enjia: !!s.visitEnjia,
-        visit_committee: !!s.visitCommittee,
-        locked: !!s.locked,
-        sort_order: i
-      }));
-      await upsertSessions(rows);
-    }
-
-    // 寫入異動紀錄（如果有新增的）
-    if (Array.isArray(DATA.changeLog)) {
-      const existingLogs = await getChangeLogs(false);
-      const existingLogIds = new Set((existingLogs || []).map(l => l.id));
-      const newLogs = DATA.changeLog.filter(l => !existingLogIds.has(l.id));
-      for (const l of newLogs) {
-        await insertChangeLog({
-          id: l.id,
-          school_id: l.schoolId,
-          school_name: l.schoolName || '',
-          session_id: l.sessionId || null,
-          is_basic_info: !!l.isBasicInfo,
-          timestamp: l.timestamp,
-          reason: l.reason || '',
-          deleted: !!l.deleted,
-          acknowledged: !!l.acknowledged,
-          before_data: l.before || null,
-          after_data: l.after || null,
-          had_visit_conflict: !!l.hadVisitConflict,
-          visit_flags_at_change: l.visitFlagsAtChange || null
-        });
-      }
-    }
-    return true;
-  } catch(e) {
-    console.error('saveData error', e);
-    showToast('⚠️ 儲存失敗：' + e.message);
-    return false;
-  }
-}
-
-
-
-(function(){
 
 // 115學年度計畫期程：2026.08.01 - 2027.07.31
 const PROGRAM_START = {y:2026, m:7};  // m is 0-indexed: 7 = August
@@ -1106,8 +920,9 @@ $$('.tab-btn').forEach(btn=>{
 /* ---------------- fill panel ---------------- */
 
 function refreshSchoolSelectOptions(){
-  const cat = $('#categoryPicker').value;
-  const sel = $('#schoolSelect');
+  const cp = $('#categoryPicker'), sel = $('#schoolSelect');
+  if(!cp || !sel) return;
+  const cat = cp.value;
   sel.innerHTML = buildSchoolOptionsHTML(cat, {allLabel:'請選擇…', useId:true});
   sel.value = '';
 }
@@ -1230,20 +1045,20 @@ $('#addTeacherBtn')&&$('#addTeacherBtn').addEventListener('click', ()=>{
 });
 
 ['artistsSummary','teachersSummary','studentsSummary'].forEach(id=>{
-  const _el=`#${id}`,_dom=$(_el);if(_dom)_dom.addEventListener('click', ()=>{
+  const _dom=$(`#${id}`);if(_dom)_dom.addEventListener('click', ()=>{
     const bodyId = id.replace('Summary','Body');
     const body = $(`#${bodyId}`);
     if(!body) return;
     const open = body.style.display !== 'none';
     body.style.display = open ? 'none' : 'block';
-    const _el2=$(`#${id}`);if(_el2)_el2.classList.toggle('open', !open);
+    const _c=$(`#${id}`);if(_c)_c.classList.toggle('open', !open);
   });
 });
 
 function collapseAllMultiEntrySections(){
   ['artistsSummary','teachersSummary','studentsSummary'].forEach(id=>{
-    const _cb=$(`#${id.replace('Summary','Body')}`); if(_cb) _cb.style.display='none';
-    const _el2=$(`#${id}`);if(_el2)_el2.classList.remove('open');
+    const _b=$(`#${id.replace('Summary','Body')}`);if(_b)_b.style.display='none';
+    const _c=$(`#${id}`);if(_c)_c.classList.remove('open');
   });
 }
 
@@ -2868,42 +2683,159 @@ $('#exportCsvBtn')&&$('#exportCsvBtn').addEventListener('click', ()=>{
 
 
 
-async function init(){
-  showLoading(true);
-  await loadData();
-  ensureCanonicalSchools();
-  if(typeof SCHOOL_ID !== 'undefined' && SCHOOL_ID){
-    // 填表頁：直接鎖定到指定學校
-    refreshSchoolSelectOptions();
-    const school = DATA.schools.find(s=>s.id===SCHOOL_ID);
-    if(school){
-      currentSchoolId = SCHOOL_ID;
-      loadFormFor(school);
-      $('#formArea').style.display='block';
-      // 隱藏學校選擇區
-      const picker = document.querySelector('.card:has(.school-picker-row)');
-      if(picker) picker.style.display='none';
-    }
-  } else {
-    // 總覽頁
-    refreshSchoolSelectOptions();
-    refreshAdminSchoolNameOptions();
-    renderAdmin();
-  }
-  showLoading(false);
+/* ================= Supabase 資料層 ================= */
+
+function dbRowToSession(r){
+  return {
+    id: r.id, semester: r.semester, date: r.date,
+    startTime: r.start_time, endTime: r.end_time,
+    companionTeacher: r.companion_teacher||'', instructor: r.instructor||'',
+    studentGrades: r.student_grades||[], location: r.location||'', content: r.content||'',
+    visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
+    visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
+    visitCommittee: r.visit_committee||false, locked: r.locked||false
+  };
 }
 
+function schoolRowToObj(school, sessions){
+  return {
+    id: school.id, name: school.name, category: school.category,
+    region: school.region, county: school.county, targetHours: school.target_hours,
+    collaboratingArtists: school.collaborating_artists||[],
+    companionTeachers: school.companion_teachers||[],
+    studentGroups: school.student_groups||[],
+    contactTeacher: school.contact_teacher||'', contactPhone: school.contact_phone||'',
+    basicInfoLocked: school.basic_info_locked||false,
+    sessions: (sessions||[]).map(dbRowToSession),
+    updatedAt: school.updated_at
+  };
+}
+
+async function loadData(){
+  if(SCHOOL_ID){
+    // 填表頁：只載入這一所學校
+    const school = await getSchool(SCHOOL_ID);
+    if(!school){ showToast('找不到此學校，請確認連結是否正確'); DATA.schools=[]; return; }
+    const sessions = await getSessionsBySchool(SCHOOL_ID);
+    DATA.schools = [ schoolRowToObj(school, sessions) ];
+  }else{
+    // 總覽頁：載入全部
+    const schools = await getAllSchools();
+    const sessions = await getAllSessions();
+    const bySchool = {};
+    (sessions||[]).forEach(s=>{ (bySchool[s.school_id]=bySchool[s.school_id]||[]).push(s); });
+    DATA.schools = (schools||[]).map(sc => schoolRowToObj(sc, bySchool[sc.id]||[]));
+    const logs = await getChangeLogs(false);
+    DATA.changeLog = (logs||[]).map(r=>({
+      id:r.id, schoolId:r.school_id, schoolName:r.school_name, sessionId:r.session_id,
+      isBasicInfo:r.is_basic_info, timestamp:r.timestamp, reason:r.reason,
+      deleted:r.deleted, acknowledged:r.acknowledged,
+      before:r.before_data, after:r.after_data,
+      hadVisitConflict:r.had_visit_conflict, visitFlagsAtChange:r.visit_flags_at_change
+    }));
+  }
+}
+
+async function saveData(){
+  const school = DATA.schools.find(s=>s.id===currentSchoolId) || DATA.schools[0];
+  if(!school) return false;
+  try{
+    await updateSchool(school.id, {
+      collaborating_artists: school.collaboratingArtists,
+      companion_teachers: school.companionTeachers,
+      student_groups: school.studentGroups,
+      contact_teacher: school.contactTeacher,
+      contact_phone: school.contactPhone,
+      basic_info_locked: school.basicInfoLocked,
+      updated_at: new Date().toISOString()
+    });
+    // 刪除已移除的場次
+    const existing = await getSessionsBySchool(school.id);
+    const keepIds = school.sessions.map(s=>s.id);
+    for(const r of (existing||[])){
+      if(!keepIds.includes(r.id)) await deleteSession(r.id);
+    }
+    // upsert 現有場次
+    if(school.sessions.length){
+      const rows = school.sessions.map((s,i)=>({
+        id:s.id, school_id:school.id, semester:s.semester||'',
+        date:s.date||null, start_time:s.startTime||null, end_time:s.endTime||null,
+        companion_teacher:s.companionTeacher||'', instructor:s.instructor||'',
+        student_grades:s.studentGrades||[], location:s.location||'', content:s.content||'',
+        visit_planned:!!s.visitPlanned, visit_confirmed:!!s.visitConfirmed,
+        visit_suyu:!!s.visitSuyu, visit_enjia:!!s.visitEnjia, visit_committee:!!s.visitCommittee,
+        locked:!!s.locked, sort_order:i
+      }));
+      await upsertSessions(rows);
+    }
+    // 寫入新的異動紀錄
+    if(Array.isArray(DATA.changeLog) && DATA.changeLog.length){
+      const existingLogs = await getChangeLogs(false);
+      const seen = new Set((existingLogs||[]).map(l=>l.id));
+      for(const l of DATA.changeLog){
+        if(seen.has(l.id)) continue;
+        await insertChangeLog({
+          id:l.id, school_id:l.schoolId, school_name:l.schoolName||'',
+          session_id:l.sessionId||null, is_basic_info:!!l.isBasicInfo,
+          timestamp:l.timestamp, reason:l.reason||'', deleted:!!l.deleted,
+          acknowledged:!!l.acknowledged, before_data:l.before||null, after_data:l.after||null,
+          had_visit_conflict:!!l.hadVisitConflict, visit_flags_at_change:l.visitFlagsAtChange||null
+        });
+      }
+    }
+    return true;
+  }catch(e){
+    console.error('saveData error', e);
+    showToast('⚠️ 儲存失敗：'+e.message);
+    return false;
+  }
+}
+
+/* ================= init ================= */
+
 function showLoading(show){
-  const el = $('#loading');
-  const ct = $('#content');
-  if(el) el.style.display = show ? 'block' : 'none';
-  if(ct) ct.style.display = show ? 'none' : 'block';
+  const l=$('#loading'), c=$('#content');
+  if(l) l.style.display = show?'block':'none';
+  if(c) c.style.display = show?'none':'block';
+}
+
+async function init(){
+  showLoading(true);
+  try{
+    await loadData();
+    if(SCHOOL_ID){
+      // 填表頁
+      const school = DATA.schools.find(s=>s.id===SCHOOL_ID);
+      if(school){
+        currentSchoolId = SCHOOL_ID;
+        loadFormFor(school);
+        const fa=$('#formArea'); if(fa) fa.style.display='block';
+        // 顯示學校名稱 banner
+        const bn=$('#bannerName'), bc=$('#bannerCategory');
+        if(bn) bn.textContent = school.name;
+        if(bc){
+          bc.textContent = school.category;
+          const cc={'音樂班':'#B33A3A','舞蹈班':'#D1722F','美術班':'#C9A227','普通班':'#8C5A3C'};
+          bc.style.background = cc[school.category]||'#888'; bc.style.color='#fff';
+        }
+      }else{
+        showToast('找不到此學校，請確認連結是否正確');
+      }
+    }else{
+      // 總覽頁
+      if(typeof refreshAdminSchoolNameOptions==='function') refreshAdminSchoolNameOptions();
+      renderAdmin();
+    }
+  }catch(e){
+    console.error('init error', e);
+    showToast('載入失敗：'+e.message);
+  }
+  showLoading(false);
 }
 
 init();
 
 })();
-
 </script>
 </body>
 </html>
