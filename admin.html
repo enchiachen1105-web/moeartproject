@@ -1230,19 +1230,20 @@ $('#addTeacherBtn')&&$('#addTeacherBtn').addEventListener('click', ()=>{
 });
 
 ['artistsSummary','teachersSummary','studentsSummary'].forEach(id=>{
-  $(`#${id}`).addEventListener('click', ()=>{
+  const _el=`#${id}`,_dom=$(_el);if(_dom)_dom.addEventListener('click', ()=>{
     const bodyId = id.replace('Summary','Body');
     const body = $(`#${bodyId}`);
+    if(!body) return;
     const open = body.style.display !== 'none';
     body.style.display = open ? 'none' : 'block';
-    $(`#${id}`).classList.toggle('open', !open);
+    const _el2=$(`#${id}`);if(_el2)_el2.classList.toggle('open', !open);
   });
 });
 
 function collapseAllMultiEntrySections(){
   ['artistsSummary','teachersSummary','studentsSummary'].forEach(id=>{
-    $(`#${id.replace('Summary','Body')}`).style.display = 'none';
-    $(`#${id}`).classList.remove('open');
+    const _cb=$(`#${id.replace('Summary','Body')}`); if(_cb) _cb.style.display='none';
+    const _el2=$(`#${id}`);if(_el2)_el2.classList.remove('open');
   });
 }
 
@@ -2838,7 +2839,7 @@ function downloadFile(filename, content, mime){
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
-$('#exportIcsBtn').addEventListener('click', ()=>{
+$('#exportIcsBtn')&&$('#exportIcsBtn').addEventListener('click', ()=>{
   const events = getFilteredEventsFixed().filter(e=>e.date);
   if(events.length===0){ showToast('目前篩選條件下沒有可匯出的場次'); return; }
   const ics = buildICS(events);
@@ -2846,7 +2847,7 @@ $('#exportIcsBtn').addEventListener('click', ()=>{
   showToast(`✓ 已匯出 ${events.length} 筆場次（.ics）`);
 });
 
-$('#exportCsvBtn').addEventListener('click', ()=>{
+$('#exportCsvBtn')&&$('#exportCsvBtn').addEventListener('click', ()=>{
   const events = getFilteredEventsFixed();
   if(events.length===0){ showToast('目前篩選條件下沒有可匯出的場次'); return; }
   const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容'];
