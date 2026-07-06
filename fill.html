@@ -258,8 +258,8 @@
 
 <div class="modal-overlay" id="editReasonModal" style="display:none;">
   <div class="modal-box">
-    <h3>修改原因</h3>
-    <p class="help-text" style="margin-top:0;">這筆資料已經儲存過。請說明這次修改的原因，方便主辦方追蹤異動內容。</p>
+    <h3 id="editReasonTitle">修改原因</h3>
+    <p class="help-text" id="editReasonHelp" style="margin-top:0;">這筆資料已經儲存過。請說明這次修改的原因，方便主辦方追蹤異動內容。</p>
     <div class="quick-reason-row">
       <label><input type="checkbox" class="quickReasonChk" value="學校有活動">學校有活動</label>
       <label><input type="checkbox" class="quickReasonChk" value="師資時間安排">師資時間安排</label>
@@ -292,7 +292,7 @@
       <span id="bannerCategory" class="badge"></span>
       <span id="bannerName" style="font-size:17px;font-weight:700;"></span>
     </div>
-    <div class="card">
+    <div class="card" id="schoolPickerCard">
         <div class="card-title"><span class="num">1</span>選擇學校</div>
         <div class="school-picker-row">
           <div style="flex:1; min-width:220px;">
@@ -312,10 +312,10 @@
             </select>
           </div>
         </div>
-        <div id="updatedNote" class="updated-note"></div>
       </div>
 
       <div id="formArea" style="display:none;">
+        <div id="updatedNote" class="updated-note" style="margin-bottom:10px;"></div>
         <div class="card">
           <div class="card-title" style="justify-content:space-between; display:flex;">
             <span><span class="num">2</span>學校基本資料</span>
@@ -397,8 +397,8 @@
 
           <div id="sessionCalWrap" style="display:none;">
             <div class="legend" style="margin-bottom:12px;">
-              <span class="legend-item"><span class="legend-swatch" style="background:var(--accent);"></span>上學期（含暑假）</span>
-              <span class="legend-item"><span class="legend-swatch" style="background:var(--teal);"></span>下學期（含寒假）</span>
+              <span class="legend-item"><span class="legend-swatch" style="background:var(--accent);"></span>上學期</span>
+              <span class="legend-item"><span class="legend-swatch" style="background:var(--teal);"></span>下學期</span>
             </div>
 
             <!-- 單月詳細檢視 -->
@@ -540,21 +540,19 @@ async function acknowledgeChangeLog(id) {
 
 
 
-// 115學年度計畫期程：2026.08.01 - 2027.07.31
+// 115學年度計畫期程：2026.08.01 - 2027.06.30
 const PROGRAM_START = {y:2026, m:7};  // m is 0-indexed: 7 = August
-const PROGRAM_END   = {y:2027, m:6};  // 6 = July
+const PROGRAM_END   = {y:2027, m:5};  // 5 = June
 
-// 上學期(含暑假)只落在這些年月／下學期(含寒假)只落在這些年月 — drives the
+// 上學期只落在這些年月／下學期只落在這些年月 — drives the
 // 上課日期 year/month/day dropdowns so other years/months are never selectable.
 const SEMESTER_MONTHS = {
   '上學期': [[2026,8],[2026,9],[2026,10],[2026,11],[2026,12],[2027,1]],
-  '暑假':   [[2026,8],[2026,9],[2026,10],[2026,11],[2026,12],[2027,1]],
-  '下學期': [[2027,2],[2027,3],[2027,4],[2027,5],[2027,6],[2027,7]],
-  '寒假':   [[2027,2],[2027,3],[2027,4],[2027,5],[2027,6],[2027,7]]
+  '下學期': [[2027,2],[2027,3],[2027,4],[2027,5],[2027,6]]
 };
 const DEFAULT_TARGET = 32;
 
-// All 12 months in the program period, in order, tagged with which semester
+// All months in the program period, in order, tagged with which semester
 // they belong to — drives the 課程場次 month-filter tabs (上/下學期 colors).
 const FORM_MONTHS = [
   {y:2026, m:8,  label:'8月',  sem:'上'},
@@ -567,8 +565,7 @@ const FORM_MONTHS = [
   {y:2027, m:3,  label:'3月',  sem:'下'},
   {y:2027, m:4,  label:'4月',  sem:'下'},
   {y:2027, m:5,  label:'5月',  sem:'下'},
-  {y:2027, m:6,  label:'6月',  sem:'下'},
-  {y:2027, m:7,  label:'7月',  sem:'下'}
+  {y:2027, m:6,  label:'6月',  sem:'下'}
 ];
 
 let DATA = { targetSchoolCount: DEFAULT_TARGET, schools: [] };
@@ -594,13 +591,19 @@ function showToast(msg, duration){
 /* ---------------- edit-reason modal ---------------- */
 
 let _editReasonCallback = null;
-function openEditReasonModal(onConfirm){
+function openEditReasonModal(onConfirm, opts){
+  opts = opts || {};
+  $('#editReasonTitle').textContent = opts.title || '修改原因';
+  $('#editReasonHelp').textContent = opts.help || '這筆資料已經儲存過。請說明這次修改的原因，方便主辦方追蹤異動內容。';
+  $('#editReasonConfirmBtn').textContent = opts.confirmText || '確認修改';
+  _editReasonRequireMsg = opts.requireMsg || '請填寫修改原因';
   $('#editReasonInput').value = '';
   $$('.quickReasonChk').forEach(chk=>chk.checked = false);
   $('#editReasonModal').style.display = 'flex';
   _editReasonCallback = onConfirm;
   setTimeout(()=>$('#editReasonInput').focus(), 0);
 }
+let _editReasonRequireMsg = '請填寫修改原因';
 function closeEditReasonModal(){
   $('#editReasonModal').style.display = 'none';
   _editReasonCallback = null;
@@ -608,7 +611,7 @@ function closeEditReasonModal(){
 $('#editReasonCancelBtn')&&$('#editReasonCancelBtn').addEventListener('click', closeEditReasonModal);
 $('#editReasonConfirmBtn')&&$('#editReasonConfirmBtn').addEventListener('click', ()=>{
   const reason = $('#editReasonInput').value.trim();
-  if(!reason){ showToast('請填寫修改原因'); return; }
+  if(!reason){ showToast(_editReasonRequireMsg); return; }
   const cb = _editReasonCallback;
   closeEditReasonModal();
   if(cb) cb(reason);
@@ -666,6 +669,18 @@ function computeHours(start, end){
 }
 
 function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
+
+// Builds a 'YYYY-MM-DD' string from local calendar components WITHOUT going
+// through UTC. Using Date.toISOString() here would shift the date by the
+// timezone offset (e.g. Taiwan UTC+8 turns 9/15 00:00 into 9/14 16:00 UTC →
+// wrong day), which caused calendar chips to land on the wrong date.
+function toDateKey(y, m1based, d){
+  return `${y}-${String(m1based).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function todayDateKey(){
+  const t = new Date();
+  return toDateKey(t.getFullYear(), t.getMonth()+1, t.getDate());
+}
 
 function yearsForSemester(semester){
   const months = SEMESTER_MONTHS[semester] || [];
@@ -1161,6 +1176,7 @@ function addSessionRow(data, opts){
       <span class="btn-row" style="gap:10px;">
         <span class="lock-note" style="display:none;">🔒 已鎖定</span>
         <button type="button" class="btn btn-ghost btn-sm editSessionBtn" style="display:none;">✏️ 修改</button>
+        <button type="button" class="btn-danger-text lockedRemoveBtn" style="display:none;">移除</button>
         <button type="button" class="btn btn-primary btn-sm saveSessionBtn" style="display:none;">💾 儲存</button>
         <span class="conflict-badge" title="這筆與下方另一筆場次的日期、時間重疊">■ 時間重複</span>
         <span class="session-hours"></span>
@@ -1173,8 +1189,6 @@ function addSessionRow(data, opts){
         <select class="s-semester">
           <option value="上學期">上學期</option>
           <option value="下學期">下學期</option>
-          <option value="暑假">暑假</option>
-          <option value="寒假">寒假</option>
         </select>
       </div>
       <div>
@@ -1275,6 +1289,24 @@ function addSessionRow(data, opts){
       showToast('已解鎖這筆場次，修改完成後記得儲存');
     });
   });
+  wrap.querySelector('.lockedRemoveBtn').addEventListener('click', ()=>{
+    openEditReasonModal((reason)=>{
+      // Record the deletion (logged at next save) then remove the card.
+      pendingDeletions.push({sessionId: wrap.dataset.id, reason: reason});
+      wrap.remove();
+      renumberSessions();
+      checkSessionOverlaps();
+      recalcTotals();
+      applySessionMonthFilter();
+      // Persist immediately so the removal is saved without needing another edit.
+      if(currentSchoolRef) commitSaveSchool(currentSchoolRef);
+    }, {
+      title: '移除原因',
+      help: '這筆場次已經儲存過。請說明移除的原因，方便主辦方追蹤異動內容。',
+      confirmText: '確認移除',
+      requireMsg: '請填寫移除原因'
+    });
+  });
   wrap.querySelector('.saveSessionBtn').addEventListener('click', ()=>{
     openConfirmModal('確認儲存這筆課程場次的修改？', async ()=>{
       if(!currentSchoolRef){ showToast('找不到此學校資料，請重新整理頁面後再試'); return; }
@@ -1300,6 +1332,7 @@ function setRowLockState(wrap, locked){
   wrap.classList.toggle('locked-card', locked);
   wrap.querySelector('.lock-note').style.display = locked ? 'inline-flex' : 'none';
   wrap.querySelector('.editSessionBtn').style.display = locked ? 'inline-flex' : 'none';
+  wrap.querySelector('.lockedRemoveBtn').style.display = locked ? 'inline-flex' : 'none';
   wrap.querySelector('.saveSessionBtn').style.display = locked ? 'none' : 'inline-flex';
   wrap.querySelector('.removeSessionBtn').style.display = locked ? 'none' : 'inline-flex';
   wrap.querySelector('.addGradeBtn').style.display = locked ? 'none' : 'inline-flex';
@@ -1528,7 +1561,7 @@ function renderSchoolMiniCalendar(){
   const firstOfMonth = new Date(formCalYear, formCalMonth, 1);
   const startWeekday = firstOfMonth.getDay();
   const daysInMonthCount = new Date(formCalYear, formCalMonth+1, 0).getDate();
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = todayDateKey();
 
   const grid = $('#schoolCalGrid');
   grid.innerHTML = '';
@@ -1536,10 +1569,9 @@ function renderSchoolMiniCalendar(){
   for(let i=0;i<totalCells;i++){
     const dayNum = i - startWeekday + 1;
     const cell = document.createElement('div');
-    const dateObj = new Date(formCalYear, formCalMonth, dayNum);
     const inMonth = dayNum>=1 && dayNum<=daysInMonthCount;
-    const dateKey = dateObj.toISOString().slice(0,10);
-    cell.className = 'cal-cell' + (inMonth?'':' out') + (dateKey===todayStr?' today':'');
+    const dateKey = inMonth ? toDateKey(formCalYear, formCalMonth+1, dayNum) : '';
+    cell.className = 'cal-cell' + (inMonth?'':' out') + (dateKey && dateKey===todayStr?' today':'');
     const dayEvents = (byDate[dateKey]||[]).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
     const mKey = inMonth ? `${formCalYear}-${String(formCalMonth+1).padStart(2,'0')}` : '';
     let chipsHtml = '';
@@ -1552,7 +1584,7 @@ function renderSchoolMiniCalendar(){
         `<span class="day-chip-name">${escapeHtml(ev.startTime||'')}~${escapeHtml(ev.endTime||'')}${who?'　'+escapeHtml(who):''}</span>`+
         `</div>`;
     });
-    cell.innerHTML = `<div class="d">${dateObj.getDate()}</div>${chipsHtml}`;
+    cell.innerHTML = `<div class="d">${inMonth?dayNum:''}</div>${chipsHtml}`;
     // Delegate clicks on chips (not the whole cell)
     cell.querySelectorAll('.day-chip[data-sid]').forEach(chip=>{
       chip.addEventListener('click', e=>{
@@ -1775,6 +1807,13 @@ async function commitSaveSchool(school){
       visitCommittee: !!existing.visitCommittee,
       locked: true
     };
+  }).filter(s=>{
+    // Skip completely-blank rows (e.g. the empty starter row) so saving never
+    // creates a locked empty session. A row counts as real if it has a date,
+    // any time, or any text content.
+    return s.date || s.startTime || s.endTime || s.companionTeacher ||
+           s.instructor || s.location || s.content ||
+           (Array.isArray(s.studentGrades) && s.studentGrades.length>0);
   });
 
   // Rows removed during this editing session (after going through the
@@ -2485,7 +2524,7 @@ function renderCalendar(){
   const firstOfMonth = new Date(calYear, calMonth, 1);
   const startWeekday = firstOfMonth.getDay();
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = todayDateKey();
 
   const grid = $('#calGrid');
   grid.innerHTML = '';
@@ -2494,18 +2533,9 @@ function renderCalendar(){
   for(let i=0;i<totalCells;i++){
     const dayNum = i - startWeekday + 1;
     const cell = document.createElement('div');
-    let dateObj, inMonth = true;
-    if(dayNum < 1){
-      dateObj = new Date(calYear, calMonth, dayNum);
-      inMonth = false;
-    }else if(dayNum > daysInMonth){
-      dateObj = new Date(calYear, calMonth, dayNum);
-      inMonth = false;
-    }else{
-      dateObj = new Date(calYear, calMonth, dayNum);
-    }
-    const dateKey = dateObj.toISOString().slice(0,10);
-    cell.className = 'cal-cell' + (inMonth?'':' out') + (dateKey===todayStr?' today':'') + (dateKey===selectedDayKey?' selected':'');
+    const inMonth = dayNum>=1 && dayNum<=daysInMonth;
+    const dateKey = inMonth ? toDateKey(calYear, calMonth+1, dayNum) : '';
+    cell.className = 'cal-cell' + (inMonth?'':' out') + (dateKey && dateKey===todayStr?' today':'') + (dateKey && dateKey===selectedDayKey?' selected':'');
     const dayEvents = (byDate[dateKey]||[]).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
     let chipsHtml = '';
     dayEvents.forEach(ev=>{
@@ -2517,11 +2547,13 @@ function renderCalendar(){
         flagBarHTML(ev)+
         `</div>`;
     });
-    cell.innerHTML = `<div class="d">${dateObj.getDate()}</div>${chipsHtml}`;
-    cell.addEventListener('click', ()=>{
-      selectedDayKey = (selectedDayKey === dateKey) ? null : dateKey;
-      renderCalendar();
-    });
+    cell.innerHTML = `<div class="d">${inMonth?dayNum:''}</div>${chipsHtml}`;
+    if(inMonth){
+      cell.addEventListener('click', ()=>{
+        selectedDayKey = (selectedDayKey === dateKey) ? null : dateKey;
+        renderCalendar();
+      });
+    }
     grid.appendChild(cell);
   }
 
@@ -2806,6 +2838,12 @@ async function init(){
         currentSchoolId = SCHOOL_ID;
         loadFormFor(school);
         const fa=$('#formArea'); if(fa) fa.style.display='block';
+        // 每校一網址，不需要選校卡片，整張隱藏
+        const pc=$('#schoolPickerCard'); if(pc) pc.style.display='none';
+        // 隱藏選校後，區塊編號重新從 1 開始（基本資料=1、課程場次=2）
+        const nums = document.querySelectorAll('#formArea .card-title .num');
+        if(nums[0]) nums[0].textContent = '1';
+        if(nums[1]) nums[1].textContent = '2';
         // 顯示學校名稱 banner
         const bn=$('#bannerName'), bc=$('#bannerCategory');
         if(bn) bn.textContent = school.name;
