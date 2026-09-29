@@ -312,6 +312,10 @@
               <option value="下學期">下學期</option>
             </select>
           </div>
+          <div class="field" style="flex:0 0 auto; justify-content:flex-end;">
+            <label>&nbsp;</label>
+            <button type="button" class="btn btn-primary" id="goToSchoolFillBtn">前往學校填表頁 ↗</button>
+          </div>
         </div>
       </div>
 
@@ -2512,6 +2516,14 @@ $('#categoryFilter')&&$('#categoryFilter').addEventListener('change', ()=>{
 });
 $('#schoolNameFilter')&&$('#schoolNameFilter').addEventListener('change', renderAdmin);
 $('#semesterFilter')&&$('#semesterFilter').addEventListener('change', renderAdmin);
+
+$('#goToSchoolFillBtn')&&$('#goToSchoolFillBtn')&&$('#goToSchoolFillBtn').addEventListener('click', ()=>{
+  const schoolName = $('#schoolNameFilter').value;
+  if(!schoolName){ showToast('請先在上面選擇一所學校'); return; }
+  const school = DATA.schools.find(s=>s.name===schoolName);
+  if(!school){ showToast('找不到這所學校的資料'); return; }
+  window.open(`/fill/${school.id}`, '_blank', 'noopener');
+});
 
 function matchesFilter(ev){
   const schoolName = $('#schoolNameFilter').value;
