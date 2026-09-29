@@ -700,11 +700,32 @@ function refreshSessionPersonOptions(){
   const artists = getSimpleListValues('artists');
   const teachers = getSimpleListValues('teachers');
   $$('#sessionList .session-card').forEach(row=>{
-    const instSel = row.querySelector('.s-instructor');
+    row.querySelectorAll('.instructor-rows .instructor-select').forEach(sel=>{
+      sel.innerHTML = buildPersonOptionsHTML(artists, sel.value);
+    });
     const compSel = row.querySelector('.s-companion');
-    instSel.innerHTML = buildPersonOptionsHTML(artists, instSel.value);
     compSel.innerHTML = buildPersonOptionsHTML(teachers, compSel.value);
   });
+}
+
+/* ---------------- per-session 授課藝師（多筆） ---------------- */
+
+function getSessionInstructorValues(wrap){
+  return Array.from(wrap.querySelectorAll('.instructor-rows .instructor-select')).map(s=>s.value).filter(Boolean);
+}
+
+function buildInstructorRow(wrap, selectedName){
+  const row = document.createElement('div');
+  row.className = 'entry-row';
+  row.innerHTML = `<select class="instructor-select" style="flex:1;"></select><button type="button" class="btn-danger-text removeEntryBtn">移除</button>`;
+  row.querySelector('.instructor-select').innerHTML = buildPersonOptionsHTML(getSimpleListValues('artists'), selectedName);
+  row.querySelector('.removeEntryBtn').addEventListener('click', ()=>{
+    row.remove();
+    // Always keep at least one row so there's somewhere to pick a name.
+    const rowsEl = wrap.querySelector('.instructor-rows');
+    if(rowsEl.children.length===0) rowsEl.appendChild(buildInstructorRow(wrap, ''));
+  });
+  return row;
 }
 
 /* ---------------- per-session 學生年級/人數 ---------------- */
@@ -1211,8 +1232,9 @@ function addSessionRow(data, opts){
         <select class="s-companion"></select>
       </div>
       <div>
-        <label>授課藝師</label>
-        <select class="s-instructor"></select>
+        <label>授課藝師<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（可新增多位）</span></label>
+        <div class="instructor-rows"></div>
+        <button type="button" class="btn btn-ghost btn-sm addInstructorBtn">＋ 新增藝師</button>
       </div>
     </div>
     <div class="grid-row grid-2">
@@ -1243,7 +1265,16 @@ function addSessionRow(data, opts){
   wrap.querySelector('.s-start').value = data.startTime || '';
   wrap.querySelector('.s-end').value = data.endTime || '';
   wrap.querySelector('.s-companion').innerHTML = buildPersonOptionsHTML(getSimpleListValues('teachers'), data.companionTeacher);
-  wrap.querySelector('.s-instructor').innerHTML = buildPersonOptionsHTML(getSimpleListValues('artists'), data.instructor);
+  const instructorRowsEl = wrap.querySelector('.instructor-rows');
+  const existingInstructors = (data.instructor||'').split(/[、,，]/).map(s=>s.trim()).filter(Boolean);
+  if(existingInstructors.length===0){
+    instructorRowsEl.appendChild(buildInstructorRow(wrap, ''));
+  }else{
+    existingInstructors.forEach(name=>instructorRowsEl.appendChild(buildInstructorRow(wrap, name)));
+  }
+  wrap.querySelector('.addInstructorBtn').addEventListener('click', ()=>{
+    instructorRowsEl.appendChild(buildInstructorRow(wrap, ''));
+  });
   wrap.querySelector('.s-location').value = data.location || '';
   wrap.querySelector('.s-content').value = data.content || '';
 
@@ -1324,7 +1355,7 @@ function addSessionRow(data, opts){
 // a "✏️ 修改" button instead of a remove button — editing/removing a
 // previously-saved session requires going through the reason modal first.
 function setRowLockState(wrap, locked){
-  wrap.querySelectorAll('select, input[type=text]').forEach(f=>{ f.disabled = locked; });
+  wrap.querySelectorAll('select, input[type=text], input[type=time]').forEach(f=>{ f.disabled = locked; });
   wrap.classList.toggle('locked-card', locked);
   wrap.querySelector('.lock-note').style.display = locked ? 'inline-flex' : 'none';
   wrap.querySelector('.editSessionBtn').style.display = locked ? 'inline-flex' : 'none';
@@ -1333,6 +1364,9 @@ function setRowLockState(wrap, locked){
   wrap.querySelector('.removeSessionBtn').style.display = locked ? 'none' : 'inline-flex';
   wrap.querySelector('.addGradeBtn').style.display = locked ? 'none' : 'inline-flex';
   wrap.querySelectorAll('.grade-rows .removeEntryBtn').forEach(b=>{ b.style.display = locked ? 'none' : 'inline-flex'; });
+  wrap.querySelectorAll('.instructor-rows .removeEntryBtn').forEach(b=>{ b.style.display = locked ? 'none' : 'inline-flex'; });
+  const addArtistBtn = wrap.querySelector('.addInstructorBtn');
+  if(addArtistBtn) addArtistBtn.style.display = locked ? 'none' : 'inline-flex';
 }
 
 function updateRowHours(wrap){
@@ -1502,7 +1536,7 @@ function getFormSessions(){
     endTime: r.querySelector('.s-end').value,
     semester: r.querySelector('.s-semester').value,
     companion: r.querySelector('.s-companion').value,
-    instructor: r.querySelector('.s-instructor').value
+    instructor: getSessionInstructorValues(r).join('、')
   })).filter(s=>s.date);
 }
 
@@ -1928,7 +1962,7 @@ async function commitSaveSchool(school){
       startTime: r.querySelector('.s-start').value,
       endTime: r.querySelector('.s-end').value,
       companionTeacher: r.querySelector('.s-companion').value.trim(),
-      instructor: r.querySelector('.s-instructor').value.trim(),
+      instructor: getSessionInstructorValues(r).join('、'),
       studentGrades: getSessionGradeValues(r),
       location: r.querySelector('.s-location').value.trim(),
       content: r.querySelector('.s-content').value.trim()
