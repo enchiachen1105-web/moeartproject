@@ -193,6 +193,11 @@
   tbody td{padding:9px 8px; border-bottom:1px solid var(--border); vertical-align:top;}
   tbody tr:hover{background:#FCFAF7;}
   .badge{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap;}
+  .content-cell{display:inline; line-height:1.5;}
+  .content-cell.truncated{cursor:pointer;}
+  .content-cell.truncated:hover{color:var(--accent-dark);}
+  .content-cell.expanded{display:inline-block; max-width:320px; white-space:normal;}
+  .content-toggle{font-size:11px; color:var(--teal); font-weight:700; margin-left:4px; white-space:nowrap;}
   .table-wrap{overflow-x:auto;}
 
   @media (max-width:720px){
@@ -318,7 +323,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th>日期</th><th>時間</th><th>學校</th><th>學期</th><th>隨課老師</th><th>授課藝師</th><th>地點</th><th>訪視標記</th></tr>
+                <tr><th>日期</th><th>時間</th><th>學校</th><th>學期</th><th>隨課老師</th><th>授課藝師</th><th>授課內容</th><th>地點</th><th>訪視標記</th></tr>
               </thead>
               <tbody id="listTbody"></tbody>
             </table>
@@ -365,10 +370,11 @@
 
       <div class="card">
         <div class="card-title">匯出</div>
-        <p class="help-text" style="margin-top:-4px;">會依目前篩選條件匯出。匯出 .ics 後，到 Google 日曆「設定 → 匯入與匯出 → 匯入」上傳即可。</p>
+        <p class="help-text" style="margin-top:-4px;">「一鍵匯出全部學校」不受目前篩選條件影響，永遠匯出全部32校完整資料；其餘兩個按鈕會依目前篩選條件匯出。匯出 .ics 後，到 Google 日曆「設定 → 匯入與匯出 → 匯入」上傳即可。</p>
         <div class="btn-row">
+          <button class="btn btn-primary" id="exportAllCsvBtn">⤓ 一鍵匯出全部學校課程期程表（CSV）</button>
           <button class="btn btn-teal" id="exportIcsBtn">⤓ 匯出 .ics（Google 日曆用）</button>
-          <button class="btn btn-ghost" id="exportCsvBtn">⤓ 匯出 Excel（CSV）</button>
+          <button class="btn btn-ghost" id="exportCsvBtn">⤓ 匯出目前篩選結果（CSV）</button>
         </div>
       </div>
 
@@ -1170,11 +1176,11 @@ function addSessionRow(data, opts){
       </div>
       <div>
         <label>開始時間</label>
-        <select class="s-start"></select>
+        <input type="time" class="s-start" step="60">
       </div>
       <div>
         <label>結束時間</label>
-        <select class="s-end"></select>
+        <input type="time" class="s-end" step="60">
       </div>
     </div>
     <div class="grid-row grid-2">
@@ -1211,8 +1217,6 @@ function addSessionRow(data, opts){
   if(opts.restrictToMonth){
     restrictDateToSingleMonth(wrap, opts.restrictToMonth.y, opts.restrictToMonth.m);
   }
-  wrap.querySelector('.s-start').innerHTML = buildTimeOptionsHTML();
-  wrap.querySelector('.s-end').innerHTML = buildTimeOptionsHTML();
   wrap.querySelector('.s-start').value = data.startTime || '';
   wrap.querySelector('.s-end').value = data.endTime || '';
   wrap.querySelector('.s-companion').innerHTML = buildPersonOptionsHTML(getSimpleListValues('teachers'), data.companionTeacher);
@@ -1708,6 +1712,35 @@ $('#saveBtn')&&$('#saveBtn').addEventListener('click', ()=>{
     '老師您好！\n我們會鎖定目前填入的內容，\n後續要修改已鎖定內容的話會需要填寫原因。\n如確定安排好課程期程表的話請按「確認」。',
     ()=>commitSaveSchool(school)
   );
+});
+
+// One reason unlocks everything currently locked (基本資料 + 每一筆已鎖定的場次)
+// instead of clicking "✏️ 修改" and re-typing the same reason on each item.
+// Saving afterwards still diffs each field individually and logs exactly
+// what changed, so the admin-side change log stays just as precise.
+$('#unlockAllBtn')&&$('#unlockAllBtn').addEventListener('click', ()=>{
+  const lockedSessionRows = $$('#sessionList .session-card').filter(r=>r.classList.contains('locked-card'));
+  const basicInfoLocked = !!basicInfoCurrentlyLocked;
+  if(!basicInfoLocked && lockedSessionRows.length===0){
+    showToast('目前沒有已鎖定的內容需要解鎖');
+    return;
+  }
+  openEditReasonModal((reason)=>{
+    if(basicInfoLocked){
+      currentBasicInfoEditReason = reason;
+      setBasicInfoLockState(false);
+    }
+    lockedSessionRows.forEach(wrap=>{
+      wrap.dataset.editReason = reason;
+      setRowLockState(wrap, false);
+    });
+    showToast(`已解鎖${basicInfoLocked?'學校基本資料與':''}全部 ${lockedSessionRows.length} 筆已鎖定場次，修改完成後記得按下方「儲存」`);
+  }, {
+    title: '解鎖原因',
+    help: '請說明這次要調整已鎖定內容的原因，這個原因會套用到所有已鎖定的項目，方便主辦方追蹤異動內容。',
+    confirmText: '確認解鎖全部',
+    requireMsg: '請填寫解鎖原因'
+  });
 });
 
 async function commitSaveSchool(school){
@@ -2237,9 +2270,32 @@ function refreshAdminSchoolNameOptions(){
   const cat = $('#categoryFilter').value;
   const sel = $('#schoolNameFilter');
   const prevVal = sel.value;
-  sel.innerHTML = buildSchoolOptionsHTML(cat, {allLabel:'全部學校', useId:false});
+  sel.innerHTML = buildSchoolOptionsWithHoursHTML(cat);
   const stillExists = Array.from(sel.options).some(o=>o.value===prevVal);
   sel.value = (prevVal && stillExists) ? prevVal : '';
+}
+
+// Same grouping as buildSchoolOptionsHTML, but each option label also shows
+// "已填時數/目標時數" so the admin can scan filled-vs-target progress
+// directly from the filter dropdown without opening each school.
+function buildSchoolOptionsWithHoursHTML(category){
+  const groups = getRegionGroupedSchools(category);
+  let html = `<option value="">全部學校</option>`;
+  REGION_ORDER.forEach(region=>{
+    const list = groups[region];
+    if(!list || list.length===0) return;
+    html += `<optgroup label="${escapeHtml(region)}">`;
+    list.forEach(s=>{
+      const school = DATA.schools.find(sc=>sc.name===s.name);
+      const canonical = CANONICAL_SCHOOLS.find(c=>c.name===s.name);
+      const target = canonical ? canonical.targetHours : null;
+      const filled = school ? (school.sessions||[]).reduce((sum,sess)=>sum+computeHours(sess.startTime,sess.endTime),0) : 0;
+      const hoursLabel = target ? `（${fmtHoursTotal(filled)}/${target}h）` : '';
+      html += `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}${hoursLabel}</option>`;
+    });
+    html += '</optgroup>';
+  });
+  return html;
 }
 
 $('#categoryFilter')&&$('#categoryFilter').addEventListener('change', ()=>{
@@ -2285,11 +2341,24 @@ function renderListView(){
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
       <td data-label="隨課老師">${escapeHtml(ev.companionTeacher||'（未填）')}</td>
       <td data-label="授課藝師">${escapeHtml(ev.instructor||'')}</td>
+      <td data-label="授課內容">${contentCellHTML(ev.content)}</td>
       <td data-label="地點">${escapeHtml(ev.location||'')}</td>
       <td data-label="訪視標記">${visitCheckboxesHTML(ev)}</td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+// Long 授課內容 text gets truncated to ~18 chars with a "…展開" toggle so the
+// table stays scannable; clicking expands that one cell in place (no modal —
+// modals would be overkill for a single text field, and hovering for the
+// full text isn't discoverable on touch devices).
+function contentCellHTML(content){
+  if(!content) return '';
+  const safe = escapeHtml(content);
+  if(content.length <= 18) return `<span class="content-cell">${safe}</span>`;
+  const short = escapeHtml(content.slice(0,18));
+  return `<span class="content-cell truncated" data-full="${safe}" data-short="${short}…" title="點擊展開完整內容">${short}…<span class="content-toggle">展開</span></span>`;
 }
 
 // One-time delegated listener: handles every visit checkbox in the list,
@@ -2305,6 +2374,18 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', (e)=>{
   scheduleVisitSave();
   renderStats();
   if(activeView==='cal') renderCalendar();
+});
+
+// Click-to-expand for truncated 授課內容 cells in the list view.
+$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+  const cell = e.target.closest('.content-cell.truncated');
+  if(!cell) return;
+  const expanded = cell.classList.toggle('expanded');
+  if(expanded){
+    cell.innerHTML = cell.dataset.full + '<span class="content-toggle">收合</span>';
+  }else{
+    cell.innerHTML = cell.dataset.short + '<span class="content-toggle">展開</span>';
+  }
 });
 
 function escapeHtml(str){
@@ -2571,8 +2652,14 @@ function renderMonthList(){
     return `<div class="ev-item">
       <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
       <div class="ev-main">
-        <span class="sname" style="color:${catColor};">${escapeHtml(ev.schoolName)}</span> · ${escapeHtml(ev.companionTeacher||'（未填隨課老師）')}
-        <div class="meta">${escapeHtml(ev.instructor||'')}${ev.instructor&&ev.location?' · ':''}${escapeHtml(ev.location||'')}</div>
+        <a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
+        <div class="meta" style="margin-top:2px;">
+          <span style="color:var(--ink-soft);">隨課老師：</span>${escapeHtml(ev.companionTeacher||'（未填）')}
+          <span style="margin:0 4px;color:var(--ink-faint);">｜</span>
+          <span style="color:var(--ink-soft);">授課藝師：</span>${escapeHtml(ev.instructor||'（未填）')}
+          ${ev.location?`<span style="margin:0 4px;color:var(--ink-faint);">｜</span>${escapeHtml(ev.location)}`:''}
+        </div>
+        ${ev.content?`<div class="meta" style="margin-top:2px;"><span style="color:var(--ink-soft);">上課內容：</span>${escapeHtml(ev.content)}</div>`:''}
         ${visitLine}
       </div>
     </div>`;
@@ -2647,6 +2734,27 @@ function downloadFile(filename, content, mime){
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
+
+$('#exportAllCsvBtn')&&$('#exportAllCsvBtn').addEventListener('click', ()=>{
+  // Always exports every school's every session, ignoring whatever filter
+  // is currently applied on screen — this is the "give me everything" button.
+  const events = getAllEvents();
+  if(events.length===0){ showToast('目前沒有任何已填寫的課程場次可匯出'); return; }
+  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容'];
+  const csvEscape = (v)=>{
+    v = (v==null?'':String(v));
+    if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
+    return v;
+  };
+  const rows = events
+    .sort((a,b)=> (a.schoolName||'').localeCompare(b.schoolName||'','zh-Hant') || (a.date||'').localeCompare(b.date||''))
+    .map(ev=>[
+      ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.companionTeacher, ev.instructor, ev.location, ev.content
+    ].map(csvEscape).join(','));
+  const csv = '\uFEFF' + header.join(',') + '\r\n' + rows.join('\r\n');
+  downloadFile('全部學校課程期程表.csv', csv, 'text/csv;charset=utf-8');
+  showToast(`✓ 已匯出全部 ${DATA.schools.length} 校，共 ${events.length} 筆場次`);
+});
 
 $('#exportIcsBtn')&&$('#exportIcsBtn').addEventListener('click', ()=>{
   const events = getFilteredEventsFixed().filter(e=>e.date);
