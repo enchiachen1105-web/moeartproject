@@ -158,6 +158,10 @@
   .month-tab.sem-lower.active{background:var(--teal); color:#fff; font-weight:700;}
 
   .legend{display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--ink-soft); align-items:center; margin:10px 0 14px;}
+  .accordion-toggle{width:100%; display:flex; align-items:center; justify-content:space-between; background:none; border:none; padding:2px 0; font-size:15.5px; font-weight:700; color:var(--ink); cursor:pointer; font-family:inherit;}
+  .accordion-toggle:hover{color:var(--accent-dark);}
+  .accordion-chevron{font-size:14px; color:var(--ink-faint); transition:transform .15s;}
+  .accordion-chevron.open{transform:rotate(90deg);}
   .legend-item{display:inline-flex; align-items:center; gap:4px; white-space:nowrap;}
   .legend-swatch{display:inline-block; width:10px; height:10px; border-radius:3px; flex-shrink:0;}
   .legend-dot{display:inline-block; width:8px; height:8px; border-radius:50%; flex-shrink:0;}
@@ -427,6 +431,26 @@
         <div class="btn-row" style="justify-content:flex-end; gap:10px;">
           <button class="btn btn-ghost" id="unlockAllBtn">🔓 一鍵解鎖全部</button>
           <button class="btn btn-primary" id="saveBtn">💾 儲存課程期程表</button>
+        </div>
+      </div>
+
+      <div class="card" id="bottomCalCard">
+        <button type="button" id="bottomCalToggleBtn" class="accordion-toggle">
+          <span>📅 月曆檢視（點擊展開查看本校課程月曆）</span>
+          <span id="bottomCalChevron" class="accordion-chevron">▸</span>
+        </button>
+        <div id="bottomCalBody" style="display:none; margin-top:14px;">
+          <div class="legend" style="margin-bottom:12px;">
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--accent);"></span>上學期</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--teal);"></span>下學期</span>
+          </div>
+          <div class="cal-head">
+            <div class="cal-nav"><button class="btn btn-ghost btn-sm" id="bottomCalPrev">‹ 上月</button></div>
+            <div class="month-label" id="bottomCalMonthLabel"></div>
+            <div class="cal-nav"><button class="btn btn-ghost btn-sm" id="bottomCalNext">下月 ›</button></div>
+          </div>
+          <div class="cal-grid" id="bottomCalDow"></div>
+          <div class="cal-grid" id="bottomCalGrid" style="margin-top:4px;"></div>
         </div>
       </div>
   </div>
@@ -856,6 +880,20 @@ function getSessionDateValue(wrap){
   return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 }
 
+// Fills in "(星期X)" next to the date dropdowns once year/month/day are all
+// picked, so the teacher can sanity-check the day of week without doing the
+// math themselves. Clears back to blank if the date isn't complete yet.
+const WEEKDAY_LABELS = ['日','一','二','三','四','五','六'];
+function updateSessionWeekday(wrap){
+  const el = wrap.querySelector('.s-weekday');
+  if(!el) return;
+  const dateStr = getSessionDateValue(wrap);
+  if(!dateStr){ el.textContent = ''; return; }
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dow = new Date(y, m-1, d).getDay();
+  el.textContent = `（週${WEEKDAY_LABELS[dow]}）`;
+}
+
 // Builds a <option>/<optgroup> time picker covering 06:00–21:00 in 10-minute
 // steps, grouped 上午 (06:00–11:50) above 下午 (12:00–21:00) within one select.
 let _timeOptionsHTMLCache = null;
@@ -1188,10 +1226,11 @@ function addSessionRow(data, opts){
       </div>
       <div>
         <label>上課日期</label>
-        <div style="display:flex; gap:4px;">
+        <div style="display:flex; gap:4px; align-items:center;">
           <select class="s-date-y" style="flex:1.1;"></select>
           <select class="s-date-m" style="flex:0.8;"></select>
           <select class="s-date-d" style="flex:0.8;"></select>
+          <span class="s-weekday" style="flex:0 0 auto; font-size:12.5px; color:var(--ink-soft); white-space:nowrap; min-width:34px;"></span>
         </div>
       </div>
       <div>
@@ -1237,6 +1276,7 @@ function addSessionRow(data, opts){
   if(opts.restrictToMonth){
     restrictDateToSingleMonth(wrap, opts.restrictToMonth.y, opts.restrictToMonth.m);
   }
+  updateSessionWeekday(wrap);
   wrap.querySelector('.s-start').value = data.startTime || '';
   wrap.querySelector('.s-end').value = data.endTime || '';
   wrap.querySelector('.s-companion').innerHTML = buildPersonOptionsHTML(getSimpleListValues('teachers'), data.companionTeacher);
@@ -1265,9 +1305,9 @@ function addSessionRow(data, opts){
   });
   wrap.querySelector('.s-start').addEventListener('change', ()=>{ updateRowHours(wrap); checkSessionOverlaps(); });
   wrap.querySelector('.s-end').addEventListener('change', ()=>{ updateRowHours(wrap); checkSessionOverlaps(); });
-  wrap.querySelector('.s-date-y').addEventListener('change', ()=>{ onDateYearChange(wrap); checkSessionOverlaps(); applySessionMonthFilter(); });
-  wrap.querySelector('.s-date-m').addEventListener('change', ()=>{ onDateMonthChange(wrap); checkSessionOverlaps(); applySessionMonthFilter(); });
-  wrap.querySelector('.s-date-d').addEventListener('change', ()=>{ checkSessionOverlaps(); applySessionMonthFilter(); });
+  wrap.querySelector('.s-date-y').addEventListener('change', ()=>{ onDateYearChange(wrap); checkSessionOverlaps(); applySessionMonthFilter(); updateSessionWeekday(wrap); });
+  wrap.querySelector('.s-date-m').addEventListener('change', ()=>{ onDateMonthChange(wrap); checkSessionOverlaps(); applySessionMonthFilter(); updateSessionWeekday(wrap); });
+  wrap.querySelector('.s-date-d').addEventListener('change', ()=>{ checkSessionOverlaps(); applySessionMonthFilter(); updateSessionWeekday(wrap); });
   wrap.querySelector('.s-semester').addEventListener('change', ()=>{
     const hadDate = !!getSessionDateValue(wrap);
     setSessionDate(wrap, '');
@@ -1587,6 +1627,130 @@ function renderSchoolMiniCalendar(){
     });
     grid.appendChild(cell);
   }
+}
+
+/* ---------------- 填表頁底部：收合式月曆檢視（獨立於上方的清單/月曆切換） ---------------- */
+
+let bottomCalYear, bottomCalMonth;
+
+$('#bottomCalToggleBtn')&&$('#bottomCalToggleBtn')&&$('#bottomCalToggleBtn').addEventListener('click', ()=>{
+  const body = $('#bottomCalBody');
+  const chevron = $('#bottomCalChevron');
+  const opening = body.style.display === 'none';
+  body.style.display = opening ? 'block' : 'none';
+  if(chevron) chevron.classList.toggle('open', opening);
+  if(opening){
+    // Render lazily each time it's opened, so it always reflects whatever's
+    // currently typed in the form, even unsaved.
+    if(bottomCalYear===undefined){ bottomCalYear = PROGRAM_START.y; bottomCalMonth = PROGRAM_START.m; }
+    renderBottomCalendar();
+  }
+});
+
+$('#bottomCalPrev')&&$('#bottomCalPrev')&&$('#bottomCalPrev').addEventListener('click', ()=>{
+  if(bottomCalYear*12+bottomCalMonth <= PROGRAM_START.y*12+PROGRAM_START.m) return;
+  bottomCalMonth--; if(bottomCalMonth<0){bottomCalMonth=11;bottomCalYear--;}
+  renderBottomCalendar();
+});
+$('#bottomCalNext')&&$('#bottomCalNext')&&$('#bottomCalNext').addEventListener('click', ()=>{
+  if(bottomCalYear*12+bottomCalMonth >= PROGRAM_END.y*12+PROGRAM_END.m) return;
+  bottomCalMonth++; if(bottomCalMonth>11){bottomCalMonth=0;bottomCalYear++;}
+  renderBottomCalendar();
+});
+
+// Same rendering approach as renderSchoolMiniCalendar (single-month grid,
+// clickable chips that jump+highlight the matching session card), kept as
+// its own function with its own year/month state so it doesn't interfere
+// with the 清單/月曆 toggle further up the page.
+function renderBottomCalendar(){
+  if(bottomCalYear===undefined){ bottomCalYear = PROGRAM_START.y; bottomCalMonth = PROGRAM_START.m; }
+  if(bottomCalYear*12+bottomCalMonth < PROGRAM_START.y*12+PROGRAM_START.m){ bottomCalYear=PROGRAM_START.y; bottomCalMonth=PROGRAM_START.m; }
+  if(bottomCalYear*12+bottomCalMonth > PROGRAM_END.y*12+PROGRAM_END.m){ bottomCalYear=PROGRAM_END.y; bottomCalMonth=PROGRAM_END.m; }
+
+  const labelEl = $('#bottomCalMonthLabel');
+  if(labelEl) labelEl.textContent = `${bottomCalYear} 年 ${bottomCalMonth+1} 月`;
+  const prevBtn = $('#bottomCalPrev'), nextBtn = $('#bottomCalNext');
+  if(prevBtn) prevBtn.disabled = (bottomCalYear*12+bottomCalMonth <= PROGRAM_START.y*12+PROGRAM_START.m);
+  if(nextBtn) nextBtn.disabled = (bottomCalYear*12+bottomCalMonth >= PROGRAM_END.y*12+PROGRAM_END.m);
+
+  const dowEl = $('#bottomCalDow');
+  if(dowEl){
+    dowEl.innerHTML = '';
+    ['日','一','二','三','四','五','六'].forEach(d=>{
+      const el = document.createElement('div');
+      el.className = 'cal-dow';
+      el.textContent = d;
+      dowEl.appendChild(el);
+    });
+  }
+
+  const sessions = getFormSessions();
+  const byDate = {};
+  sessions.forEach(s=>{ (byDate[s.date]=byDate[s.date]||[]).push(s); });
+
+  const firstOfMonth = new Date(bottomCalYear, bottomCalMonth, 1);
+  const startWeekday = firstOfMonth.getDay();
+  const daysInMonthCount = new Date(bottomCalYear, bottomCalMonth+1, 0).getDate();
+  const todayStr = todayDateKey();
+
+  const grid = $('#bottomCalGrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  const totalCells = Math.ceil((startWeekday + daysInMonthCount)/7)*7;
+  for(let i=0;i<totalCells;i++){
+    const dayNum = i - startWeekday + 1;
+    const cell = document.createElement('div');
+    const inMonth = dayNum>=1 && dayNum<=daysInMonthCount;
+    const dateKey = inMonth ? toDateKey(bottomCalYear, bottomCalMonth+1, dayNum) : '';
+    cell.className = 'cal-cell' + (inMonth?'':' out') + (dateKey && dateKey===todayStr?' today':'');
+    const dayEvents = (byDate[dateKey]||[]).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
+    let chipsHtml = '';
+    dayEvents.forEach(ev=>{
+      const semColor = (ev.semester==='上學期'||ev.semester==='暑假') ? 'var(--accent)' : 'var(--teal)';
+      const who = [ev.companion, ev.instructor].filter(Boolean).join('、');
+      chipsHtml += `<div class="day-chip" style="background:${semColor}; cursor:pointer;" `+
+        `data-sid="${escapeHtml(ev.sessionCardId)}" `+
+        `title="點我跳到這筆場次・${escapeHtml(ev.startTime||'')}~${escapeHtml(ev.endTime||'')}${who?' · '+escapeHtml(who):''}">`+
+        `<span class="day-chip-name">${escapeHtml(ev.startTime||'')}~${escapeHtml(ev.endTime||'')}${who?'　'+escapeHtml(who):''}</span>`+
+        `</div>`;
+    });
+    cell.innerHTML = `<div class="d">${inMonth?dayNum:''}</div>${chipsHtml}`;
+    cell.querySelectorAll('.day-chip[data-sid]').forEach(chip=>{
+      chip.addEventListener('click', e=>{
+        e.stopPropagation();
+        jumpToBottomSession(chip.dataset.sid);
+      });
+    });
+    grid.appendChild(cell);
+  }
+}
+
+// Like jumpToSession, but this jump originates from the bottom accordion
+// calendar rather than the mid-page 清單/月曆 toggle: it makes sure the
+// target card's month isn't hidden by the mid-page month-filter tabs, makes
+// sure list view (not the mid-page calendar) is showing, then scrolls and
+// flashes a highlight so the teacher can see exactly which row it jumped to.
+function jumpToBottomSession(sessionCardId){
+  const card = $$('#sessionList .session-card').find(c=>c.dataset.id===sessionCardId);
+  if(!card) return;
+  const cardMonthKey = getSessionDateValue(card).slice(0,7);
+  if(cardMonthKey && activeMonthFilter !== 'all' && activeMonthFilter !== cardMonthKey){
+    activeMonthFilter = cardMonthKey;
+    renderMonthFilterRow();
+    applySessionMonthFilter();
+  }
+  const listBtn = $('#sessionListViewBtn'), calBtn = $('#sessionCalViewBtn');
+  if(listBtn && calBtn){
+    calBtn.classList.remove('active');
+    listBtn.classList.add('active');
+    $('#sessionCalWrap').style.display = 'none';
+    $('#sessionListWrap').style.display = 'block';
+  }
+  card.scrollIntoView({behavior:'smooth', block:'center'});
+  card.classList.remove('highlight');
+  void card.offsetWidth;
+  card.classList.add('highlight');
+  setTimeout(()=>card.classList.remove('highlight'), 1300);
 }
 
 // 12-month overview
@@ -2254,12 +2418,39 @@ async function renderChangeLog(){
     btn.addEventListener('click', async ()=>{
       const entry = DATA.changeLog.find(e=>e.id===btn.dataset.id);
       if(!entry) return;
-      entry.acknowledged = true;
-      const ok = await saveData();
-      if(ok) renderChangeLog();
+      btn.disabled = true;
+      try{
+        await acknowledgeChangeLog(entry.id);
+        entry.acknowledged = true;
+        renderChangeLog();
+      }catch(e){
+        showToast('確認失敗：'+e.message);
+        btn.disabled = false;
+      }
     });
   });
 }
+
+$('#ackAllChangeLogBtn')&&$('#ackAllChangeLogBtn').addEventListener('click', async ()=>{
+  const unread = (Array.isArray(DATA.changeLog)?DATA.changeLog:[]).filter(e=>!e.acknowledged);
+  if(unread.length===0){ showToast('目前沒有未確認的異動'); return; }
+  openConfirmModal(`確定要一次確認全部 ${unread.length} 筆未確認的異動通知嗎？`, async ()=>{
+    const btn = $('#ackAllChangeLogBtn');
+    btn.disabled = true;
+    try{
+      for(const entry of unread){
+        await acknowledgeChangeLog(entry.id);
+        entry.acknowledged = true;
+      }
+      showToast(`✓ 已一次確認 ${unread.length} 筆異動通知`);
+      renderChangeLog();
+    }catch(e){
+      showToast('一鍵確認過程中發生錯誤：'+e.message+'（已確認的部分不受影響）');
+      renderChangeLog();
+    }
+    btn.disabled = false;
+  });
+});
 
 $('#changeLogShowAllBtn')&&$('#changeLogShowAllBtn').addEventListener('click', ()=>{
   changeLogShowAll = !changeLogShowAll;
