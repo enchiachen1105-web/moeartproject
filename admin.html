@@ -2397,10 +2397,10 @@ function renderLegend(){
     `<span style="width:1px;height:14px;background:var(--border);display:inline-block;"></span>` +
     `<strong style="font-weight:700;">訪視標記：</strong>${flagPart}` +
     `<span style="width:1px;height:14px;background:var(--border);display:inline-block;"></span>` +
-    `<strong style="font-weight:700;">已訪視：</strong>` +
-    `<span class="legend-item"><span style="color:#F29CB9;">◆</span>1次</span>` +
-    `<span class="legend-item"><span style="color:#F08A24;">◆</span>2次</span>` +
-    `<span class="legend-item"><span style="color:#D6332A;">◆</span>3次以上</span>` +
+    `<strong style="font-weight:700;">訪視確定：</strong>` +
+    `<span class="legend-item"><span style="color:#F29CB9;">◆</span>第1次</span>` +
+    `<span class="legend-item"><span style="color:#F08A24;">◆</span>第2次</span>` +
+    `<span class="legend-item"><span style="color:#D6332A;">◆</span>第3次以上</span>` +
     `<span class="legend-item" style="margin-left:6px;"><span style="display:inline-block;width:16px;border-top:3px solid #D9CFC2;"></span>新的一週</span>`;
 }
 
@@ -2653,7 +2653,7 @@ function renderListView(){
   const tbody = $('#listTbody');
   tbody.innerHTML = '';
   $('#listEmpty').style.display = events.length===0 ? 'block' : 'none';
-  const visitCounts = getSchoolVisitCounts();
+  const visitNums = getVisitNumbers();
   const weekCounts = {};
   events.forEach(ev=>{ const k = weekStartKey(ev.date); weekCounts[k] = (weekCounts[k]||0)+1; });
   let prev = null;
@@ -2671,7 +2671,7 @@ function renderListView(){
     tr.innerHTML = `
       <td data-label="日期">${fmtDateDisplay(ev.date)}</td>
       <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
-      <td data-label="學校">${visitDiamondHTML(visitCounts[ev.schoolId])}<span class="badge" style="background:${catColor};color:#fff;">${escapeHtml(ev.schoolName)}</span></td>
+      <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}<span class="badge" style="background:${catColor};color:#fff;">${escapeHtml(ev.schoolName)}</span></td>
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
       <td data-label="隨課老師">${escapeHtml(ev.companionTeacher||'（未填）')}</td>
       <td data-label="授課藝師">${escapeHtml(ev.instructor||'')}</td>
@@ -2699,19 +2699,20 @@ function weekRangeLabel(wk){
   return `${y}/${m}/${d}（一）～ ${end.getMonth()+1}/${end.getDate()}（日）`;
 }
 
-/* ---- 學校已訪視次數（以「訪視確定」計，同一天兩個時段算一次） ---- */
-function getSchoolVisitCounts(){
-  const map = {};
+/* ---- 訪視確定的場次：是該校全年度第幾次訪視（依日期排序，同一天兩個時段算同一次） ---- */
+function getVisitNumbers(){
+  const map = {};   // sessionId -> 第幾次
   DATA.schools.forEach(sc=>{
-    const days = new Set((sc.sessions||[]).filter(s=>s.visitConfirmed).map(s=>s.date || ('nodate-'+s.id)));
-    map[sc.id] = days.size;
+    const confirmed = (sc.sessions||[]).filter(s=>s.visitConfirmed);
+    const days = [...new Set(confirmed.map(s=>s.date || ('9999-nodate-'+s.id)))].sort();
+    confirmed.forEach(s=>{ map[s.id] = days.indexOf(s.date || ('9999-nodate-'+s.id)) + 1; });
   });
   return map;
 }
 function visitDiamondHTML(n){
   if(!n) return '';
   const color = n>=3 ? '#D6332A' : (n===2 ? '#F08A24' : '#F29CB9');
-  return `<span class="visit-diamond" style="color:${color};" title="這所學校已訪視 ${n} 次">◆</span>`;
+  return `<span class="visit-diamond" style="color:${color};" title="這所學校的第 ${n} 次訪視">◆</span>`;
 }
 
 /* ---- 匯出用：訪視標記文字 ---- */
@@ -2797,7 +2798,7 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
   renderStats();
   if(activeView==='cal') syncAdminCalToMonthFilter();
   renderVisitFilterRow();
-  if(activeVisitFilter) renderListView();   // 篩選中取消勾選時，該列即時消失
+  if(activeVisitFilter || field==='visitConfirmed') renderListView();   // 篩選中取消勾選時該列即時消失；訪視確定變動時菱形次序即時更新
 
   try{
     await updateSession(session.id, patch);
@@ -3073,7 +3074,7 @@ function renderMonthList(){
     return;
   }
 
-  const visitCounts = getSchoolVisitCounts();
+  const visitNums = getVisitNumbers();
   bodyEl.innerHTML = events.map(ev=>{
     const catColor = CATEGORY_COLORS[ev.category] || 'var(--ink-soft)';
     const flags = VISIT_FLAGS.filter(f=>ev[f.field]);
@@ -3085,7 +3086,7 @@ function renderMonthList(){
     return `<div class="ev-item">
       <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
       <div class="ev-main">
-        ${visitDiamondHTML(visitCounts[ev.schoolId])}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
+        ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
         <div class="meta" style="margin-top:2px;">
           <span style="color:var(--ink-soft);">隨課老師：</span>${escapeHtml(ev.companionTeacher||'（未填）')}
           <span style="margin:0 4px;color:var(--ink-faint);">｜</span>
