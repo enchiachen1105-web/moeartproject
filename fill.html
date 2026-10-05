@@ -841,8 +841,9 @@ function refreshSessionPersonOptions(){
     row.querySelectorAll('.instructor-rows .instructor-select').forEach(sel=>{
       sel.innerHTML = buildPersonOptionsHTML(artists, sel.value);
     });
-    const compSel = row.querySelector('.s-companion');
-    compSel.innerHTML = buildPersonOptionsHTML(teachers, compSel.value);
+    row.querySelectorAll('.companion-rows .companion-select').forEach(sel=>{
+      sel.innerHTML = buildPersonOptionsHTML(teachers, sel.value);
+    });
   });
 }
 
@@ -859,13 +860,13 @@ function addPersonToList(key, name){
 }
 $('#sessionList')&&$('#sessionList').addEventListener('focusin', (e)=>{
   const t = e.target;
-  if(t.matches && t.matches('select.s-companion, select.instructor-select')) t.dataset.prev = t.value;
+  if(t.matches && t.matches('select.companion-select, select.instructor-select')) t.dataset.prev = t.value;
 });
 $('#sessionList')&&$('#sessionList').addEventListener('change', (e)=>{
   const sel = e.target;
-  if(!sel.matches || !sel.matches('select.s-companion, select.instructor-select')) return;
+  if(!sel.matches || !sel.matches('select.companion-select, select.instructor-select')) return;
   if(sel.value !== '__new__'){ sel.dataset.prev = sel.value; return; }
-  const key = sel.classList.contains('s-companion') ? 'teachers' : 'artists';
+  const key = sel.classList.contains('companion-select') ? 'teachers' : 'artists';
   const name = (window.prompt(key==='artists' ? '請輸入要新增的授課藝師姓名' : '請輸入要新增的隨課老師姓名') || '').trim();
   const card = sel.closest('.session-card');
   if(!name){
@@ -884,6 +885,24 @@ $('#sessionList')&&$('#sessionList').addEventListener('change', (e)=>{
 
 function getSessionInstructorValues(wrap){
   return Array.from(wrap.querySelectorAll('.instructor-rows .instructor-select')).map(s=>s.value).filter(v=>v && v!=='__new__');
+}
+
+function getSessionCompanionValues(wrap){
+  return Array.from(wrap.querySelectorAll('.companion-rows .companion-select')).map(s=>s.value).filter(v=>v && v!=='__new__');
+}
+
+function buildCompanionRow(wrap, selectedName){
+  const row = document.createElement('div');
+  row.className = 'entry-row';
+  row.innerHTML = `<select class="companion-select" style="flex:1;"></select><button type="button" class="btn-danger-text removeEntryBtn">移除</button>`;
+  row.querySelector('.companion-select').innerHTML = buildPersonOptionsHTML(getSimpleListValues('teachers'), selectedName);
+  row.querySelector('.removeEntryBtn').addEventListener('click', ()=>{
+    row.remove();
+    const rowsEl = wrap.querySelector('.companion-rows');
+    if(rowsEl.children.length===0) rowsEl.appendChild(buildCompanionRow(wrap, ''));
+    refreshSessionSummary(wrap);
+  });
+  return row;
 }
 
 function buildInstructorRow(wrap, selectedName){
@@ -1199,7 +1218,7 @@ function setFormDirty(v){
   fa.addEventListener('input', mark);
   fa.addEventListener('change', mark);
   fa.addEventListener('click', (e)=>{
-    if(e.isTrusted && e.target.closest('.removeEntryBtn, .addGradeBtn, .addInstructorBtn, #addArtistBtn, #addTeacherBtn, #addStudentGroupBtn')) setFormDirty(true);
+    if(e.isTrusted && e.target.closest('.removeEntryBtn, .addGradeBtn, .addInstructorBtn, .addCompanionBtn, #addArtistBtn, #addTeacherBtn, #addStudentGroupBtn')) setFormDirty(true);
   });
   window.addEventListener('beforeunload', (e)=>{
     if(!formDirty) return;
@@ -1219,6 +1238,24 @@ function loadFormFor(school){
   renderStudentGroupsSection(school ? school.studentGroups : []);
   setBasicInfoLockState(school ? !!school.basicInfoLocked : false);
   collapseAllMultiEntrySections();
+
+  // 場次裡出現、但名單裡沒有的人名 → 自動補進名單，選單就不會出現「（非現有名單）」
+  if(school && Array.isArray(school.sessions)){
+    const splitNames = (txt)=>(txt||'').split(/[、,，]/).map(x=>x.trim()).filter(Boolean);
+    const known = { artists: new Set(getSimpleListValues('artists')), teachers: new Set(getSimpleListValues('teachers')) };
+    const addMissing = (key, name)=>{
+      if(known[key].has(name)) return;
+      known[key].add(name);
+      $(`#${SIMPLE_LIST_CONFIG[key].rowsId}`).appendChild(buildSimpleListRow(key, name));
+    };
+    school.sessions.forEach(ss=>{
+      splitNames(ss.instructor).forEach(n=>addMissing('artists', n));
+      splitNames(ss.companionTeacher).forEach(n=>addMissing('teachers', n));
+    });
+    applyBasicInfoFieldLock();
+    refreshSimpleListSummary('artists');
+    refreshSimpleListSummary('teachers');
+  }
 
   $('#sessionList').innerHTML = '';
   pendingDeletions = [];
@@ -1445,8 +1482,9 @@ function addSessionRow(data, opts){
       </div>
       <div class="grid-row grid-2">
         <div>
-          <label>隨課老師</label>
-          <select class="s-companion"></select>
+          <label>隨課老師<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（可新增多位）</span></label>
+          <div class="companion-rows"></div>
+          <button type="button" class="btn btn-ghost btn-sm addCompanionBtn">＋ 新增隨課老師</button>
         </div>
         <div>
           <label>授課藝師<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（可新增多位）</span></label>
@@ -1482,7 +1520,16 @@ function addSessionRow(data, opts){
   updateSessionWeekday(wrap);
   wrap.querySelector('.s-start').value = data.startTime || '';
   wrap.querySelector('.s-end').value = data.endTime || '';
-  wrap.querySelector('.s-companion').innerHTML = buildPersonOptionsHTML(getSimpleListValues('teachers'), data.companionTeacher);
+  const companionRowsEl = wrap.querySelector('.companion-rows');
+  const existingCompanions = (data.companionTeacher||'').split(/[、,，]/).map(s=>s.trim()).filter(Boolean);
+  if(existingCompanions.length===0){
+    companionRowsEl.appendChild(buildCompanionRow(wrap, ''));
+  }else{
+    existingCompanions.forEach(name=>companionRowsEl.appendChild(buildCompanionRow(wrap, name)));
+  }
+  wrap.querySelector('.addCompanionBtn').addEventListener('click', ()=>{
+    companionRowsEl.appendChild(buildCompanionRow(wrap, ''));
+  });
   const instructorRowsEl = wrap.querySelector('.instructor-rows');
   const existingInstructors = (data.instructor||'').split(/[、,，]/).map(s=>s.trim()).filter(Boolean);
   if(existingInstructors.length===0){
@@ -1559,7 +1606,7 @@ function addSessionRow(data, opts){
 /* ---------------- 場次卡片：收合摘要／比對修改／複製 ---------------- */
 
 function readSessionValues(r){
-  const comp = r.querySelector('.s-companion').value;
+  const comp = getSessionCompanionValues(r).join('、');
   return {
     semester: r.querySelector('.s-semester').value,
     date: getSessionDateValue(r),
@@ -1838,7 +1885,7 @@ function getFormSessions(){
     startTime: r.querySelector('.s-start').value,
     endTime: r.querySelector('.s-end').value,
     semester: r.querySelector('.s-semester').value,
-    companion: r.querySelector('.s-companion').value,
+    companion: getSessionCompanionValues(r).join('、'),
     instructor: getSessionInstructorValues(r).join('、')
   })).filter(s=>s.date);
 }
@@ -2371,7 +2418,7 @@ async function _commitSaveSchoolInner(school){
       date: getSessionDateValue(r),
       startTime: r.querySelector('.s-start').value,
       endTime: r.querySelector('.s-end').value,
-      companionTeacher: r.querySelector('.s-companion').value.trim(),
+      companionTeacher: getSessionCompanionValues(r).join('、'),
       instructor: getSessionInstructorValues(r).join('、'),
       studentGrades: getSessionGradeValues(r),
       location: r.querySelector('.s-location').value.trim(),
