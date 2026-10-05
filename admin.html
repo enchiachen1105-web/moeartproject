@@ -197,12 +197,25 @@
   tbody td{padding:9px 8px; border-bottom:1px solid var(--border); vertical-align:top;}
   tbody tr:hover{background:#FCFAF7;}
   .badge{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap;}
+  .visit-filter-row{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:2px 0 12px;}
+  .visit-filter-row .vf-label{font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-right:2px;}
+  .visit-filter-btn{font-size:12.5px; padding:5px 12px; border-radius:99px; border:1.5px solid var(--vf-color, var(--ink)); background:#fff; color:var(--vf-color, var(--ink)); cursor:pointer; font-family:inherit; font-weight:600;}
+  .visit-filter-btn.active{background:var(--vf-color, var(--ink)); color:#fff;}
+  .visit-filter-btn .vf-count{font-weight:400; opacity:.85; margin-left:3px;}
+  .committee-name-input{width:96px; font-size:12px; padding:3px 6px; border:1px solid var(--border); border-radius:6px; font-family:inherit;}
   .content-cell{display:inline; line-height:1.5;}
   .content-cell.truncated{cursor:pointer;}
   .content-cell.truncated:hover{color:var(--accent-dark);}
   .content-cell.expanded{display:inline-block; max-width:320px; white-space:normal;}
   .content-toggle{font-size:11px; color:var(--teal); font-weight:700; margin-left:4px; white-space:nowrap;}
   .table-wrap{overflow-x:auto;}
+  /* 清單：每週一區（粗線＋週次標題） */
+  tbody tr.week-header-row td{border-top:3px solid var(--ink); border-bottom:1px solid var(--border); background:#F3EEE6; font-size:12.5px; font-weight:700; color:var(--ink); padding:6px 8px;}
+  tbody tr.week-header-row:hover{background:transparent;}
+  .week-count{font-weight:400; color:var(--ink-soft); margin-left:10px;}
+  /* 清單：隔天、不同學校 → 淺藍提示線 */
+  tbody tr.adjacent-day-hint td{border-top:2px solid #9BD3DB;}
+  .visit-diamond{font-size:13px; margin-right:4px; vertical-align:middle;}
 
   @media (max-width:720px){
     table thead{display:none;}
@@ -210,6 +223,11 @@
     tbody tr{border:1px solid var(--border); border-radius:8px; margin-bottom:10px; padding:8px 10px;}
     tbody td{border:none; padding:4px 0; display:flex; justify-content:space-between; gap:10px;}
     tbody td::before{content:attr(data-label); font-size:11.5px; color:var(--ink-faint); font-weight:700; flex-shrink:0;}
+    tbody tr.week-header-row{border:none; border-top:3px solid var(--ink); border-radius:0; background:#F3EEE6; margin:16px 0 8px; padding:6px 8px;}
+    tbody tr.week-header-row td{border:none; display:block; padding:0;}
+    tbody tr.week-header-row td::before{content:none;}
+    tbody tr.adjacent-day-hint{border-top:2px solid #9BD3DB;}
+    tbody tr.adjacent-day-hint td{border-top:none;}
   }
 
   /* calendar */
@@ -320,8 +338,12 @@
       </div>
 
       <div class="card">
-        <div class="card-title">彙整結果</div>
+        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <span>彙整結果</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="refreshDataBtn" title="其他電腦或同事剛打的勾，按這裡馬上看到最新狀態">🔄 重新載入最新資料</button>
+        </div>
         <div class="legend" id="colorLegend"></div>
+        <div class="visit-filter-row" id="visitFilterRow"></div>
 
         <div class="month-filter-row" id="adminMonthFilterRow"></div>
 
@@ -363,10 +385,6 @@
             <div class="card" id="monthListPanel" style="margin-top:14px;">
               <div class="card-title" style="justify-content:space-between; display:flex; flex-wrap:wrap; gap:8px;">
                 <span id="monthListTitle">場次清單</span>
-                <div class="view-toggle">
-                  <button class="btn btn-ghost btn-sm" id="monthListAllBtn">全部場次</button>
-                  <button class="btn btn-ghost btn-sm" id="monthListConfirmedBtn">僅訪視確定</button>
-                </div>
               </div>
               <div id="monthListBody"></div>
             </div>
@@ -521,6 +539,14 @@ async function acknowledgeChangeLog(id) {
   return await sbFetch(`/change_log?id=eq.${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ acknowledged: true })
+  });
+}
+
+// 只更新「單一場次」的部分欄位（例如訪視打勾、委員姓名），不動其他欄位
+async function updateSession(sessionId, patch) {
+  return await sbFetch(`/sessions?id=eq.${sessionId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch)
   });
 }
 
@@ -986,7 +1012,26 @@ $('#schoolSelect')&&$('#schoolSelect').addEventListener('change', (e)=>{
 
 let currentSchoolRef = null; // the live school object backing the open form
 
+// 有未儲存的修改時，老師關閉分頁或重新整理前會先跳出瀏覽器提醒
+let formDirty = false;
+(function setupUnsavedWarning(){
+  const fa = document.getElementById('formArea');
+  if(!fa) return;
+  const mark = (e)=>{ if(e.isTrusted) formDirty = true; };
+  fa.addEventListener('input', mark);
+  fa.addEventListener('change', mark);
+  fa.addEventListener('click', (e)=>{
+    if(e.isTrusted && e.target.closest('.removeSessionBtn, .removeEntryBtn, .addGradeBtn, .addInstructorBtn, #addSessionBtn, #addArtistBtn, #addTeacherBtn, #addStudentGroupBtn')) formDirty = true;
+  });
+  window.addEventListener('beforeunload', (e)=>{
+    if(!formDirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+})();
+
 function loadFormFor(school){
+  const sameSchool = !!(currentSchoolRef && school && currentSchoolRef.id === school.id);
   currentSchoolRef = school;
   $('#f-teacher').value = school ? (school.contactTeacher||'') : '';
   $('#f-phone').value = school ? (school.contactPhone||'') : '';
@@ -1008,10 +1053,15 @@ function loadFormFor(school){
   const note = $('#updatedNote');
   note.textContent = school && school.updatedAt ? `上次更新：${new Date(school.updatedAt).toLocaleString('zh-TW')}` : '';
   recalcTotals();
-  activeMonthFilter = 'all';
+  // 同一所學校重新載入（例如剛存檔）時，停留在原本的月份頁籤與檢視模式
+  if(!sameSchool) activeMonthFilter = 'all';
   renderMonthFilterRow();
   applySessionMonthFilter();
-  $('#sessionListViewBtn').click();
+  if(!sameSchool) $('#sessionListViewBtn').click();
+  else if(typeof syncCalToMonthFilter==='function') syncCalToMonthFilter();
+  const bcb = $('#bottomCalBody');
+  if(bcb && bcb.style.display!=='none' && typeof renderBottomCalendar==='function') renderBottomCalendar();
+  formDirty = false;
 }
 
 /* ---------------- multi-entry sections: 配合藝師 / 隨課老師 ---------------- */
@@ -1848,8 +1898,8 @@ function refreshHoursBar(actual){
   const bar = $('#hoursBar');
   if(!currentSchoolRef) { bar.style.display='none'; return; }
   const canonical = CANONICAL_SCHOOLS.find(c=>c.name===currentSchoolRef.name);
-  if(!canonical || !canonical.targetHours){ bar.style.display='none'; return; }
-  const target = canonical.targetHours;
+  const target = Number(currentSchoolRef.targetHours) || (canonical && canonical.targetHours) || 0;
+  if(!target){ bar.style.display='none'; return; }
   bar.style.display = 'flex';
   $('#hoursTarget').textContent = target;
   const actualVal = actual !== undefined ? actual :
@@ -1928,7 +1978,20 @@ $('#unlockAllBtn')&&$('#unlockAllBtn').addEventListener('click', ()=>{
   });
 });
 
+let _savingSchool = false;
 async function commitSaveSchool(school){
+  if(_savingSchool){ showToast('正在儲存中，請稍候…'); return; }
+  _savingSchool = true;
+  const btn = $('#saveBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '儲存中…'; }
+  try{ await _commitSaveSchoolInner(school); }
+  finally{
+    _savingSchool = false;
+    if(btn){ btn.disabled = false; btn.textContent = '💾 儲存課程期程表'; }
+  }
+}
+
+async function _commitSaveSchoolInner(school){
   const newArtists = getSimpleListValues('artists');
   const newTeachers = getSimpleListValues('teachers');
   const newGroups = getStudentGroupValues();
@@ -2021,7 +2084,9 @@ async function commitSaveSchool(school){
   const ok = await saveData();
   if(ok){
     showToast('✓ 已儲存課程期程表');
+    const y = window.scrollY;
     loadFormFor(school);
+    window.scrollTo(0, y);
   }
 }
 
@@ -2053,7 +2118,8 @@ function getAllEvents(){
         visitConfirmed: !!sess.visitConfirmed,
         visitSuyu: !!sess.visitSuyu,
         visitEnjia: !!sess.visitEnjia,
-        visitCommittee: !!sess.visitCommittee
+        visitCommittee: !!sess.visitCommittee,
+        visitCommitteeName: sess.visitCommitteeName || ''
       });
     });
   });
@@ -2304,10 +2370,15 @@ function scheduleVisitSave(){
 function visitCheckboxesHTML(ev){
   return `<div class="visit-check-group">` + VISIT_FLAGS.map(f=>{
     const checked = ev[f.field] ? 'checked' : '';
-    return `<label class="visit-check-item" style="--vc-color:${f.color};">
+    let html = `<label class="visit-check-item" style="--vc-color:${f.color};">
       <input type="checkbox" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" data-field="${f.field}" ${checked}>
       <span>${f.label}</span>
     </label>`;
+    // 打勾「委員」後，旁邊出現可輸入委員姓名的欄位
+    if(f.field==='visitCommittee'){
+      html += `<input type="text" class="committee-name-input" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" placeholder="委員姓名" value="${escapeHtml(ev.visitCommitteeName||'')}" style="${ev.visitCommittee?'':'display:none;'}">`;
+    }
+    return html;
   }).join('') + `</div>`;
 }
 
@@ -2328,7 +2399,14 @@ function renderLegend(){
   ).join('');
   el.innerHTML = `<strong style="font-weight:700;">類別標記：</strong>${categoryPart}` +
     `<span style="width:1px;height:14px;background:var(--border);display:inline-block;"></span>` +
-    `<strong style="font-weight:700;">訪視標記：</strong>${flagPart}`;
+    `<strong style="font-weight:700;">訪視標記：</strong>${flagPart}` +
+    `<span style="width:1px;height:14px;background:var(--border);display:inline-block;"></span>` +
+    `<strong style="font-weight:700;">已訪視：</strong>` +
+    `<span class="legend-item"><span style="color:#F29CB9;">◆</span>1次</span>` +
+    `<span class="legend-item"><span style="color:#F08A24;">◆</span>2次</span>` +
+    `<span class="legend-item"><span style="color:#D6332A;">◆</span>3次以上</span>` +
+    `<span class="legend-item" style="margin-left:6px;"><span style="display:inline-block;width:16px;border-top:3px solid var(--ink);"></span>新的一週</span>` +
+    `<span class="legend-item"><span style="display:inline-block;width:16px;border-top:2px solid #9BD3DB;"></span>隔天換學校</span>`;
 }
 
 /* ---------------- admin: change log ---------------- */
@@ -2347,7 +2425,7 @@ function renderChangeLogEntry(entry){
     : '';
   let diffHtml;
   if(entry.isBasicInfo){
-    const b = entry.before, a = entry.after;
+    const b = entry.before||{}, a = entry.after||{};
     diffHtml = [
       fmtChangeField('配合藝師', (b.collaboratingArtists||[]).join('、'), (a.collaboratingArtists||[]).join('、')),
       fmtChangeField('隨課老師', (b.companionTeachers||[]).join('、'), (a.companionTeachers||[]).join('、')),
@@ -2356,10 +2434,10 @@ function renderChangeLogEntry(entry){
       fmtChangeField('聯絡電話', b.contactPhone, a.contactPhone)
     ].filter(Boolean).join('') || '<div style="color:var(--ink-faint);">（欄位內容相同，無差異）</div>';
   }else if(entry.deleted){
-    const b = entry.before;
+    const b = entry.before||{};
     diffHtml = `<div style="color:var(--danger);">此場次已被刪除（原訂：${b.date?fmtDateDisplay(b.date):'（未填日期）'} ${b.startTime||''}~${b.endTime||''}）</div>`;
   }else{
-    const b = entry.before, a = entry.after;
+    const b = entry.before||{}, a = entry.after||{};
     diffHtml = [
       fmtChangeField('日期', b.date?fmtDateDisplay(b.date):'', a.date?fmtDateDisplay(a.date):''),
       fmtChangeField('時間', b.startTime?`${b.startTime}~${b.endTime}`:'', a.startTime?`${a.startTime}~${a.endTime}`:''),
@@ -2460,9 +2538,29 @@ $('#changeLogShowAllBtn')&&$('#changeLogShowAllBtn').addEventListener('click', (
 
 /* ---------------- admin: render ---------------- */
 
+function renderVisitFilterRow(){
+  const el = $('#visitFilterRow');
+  if(!el) return;
+  const base = getAllEvents().filter(matchesBaseFilter);
+  let html = `<span class="vf-label">訪視篩選：</span>` +
+    `<button type="button" class="visit-filter-btn${activeVisitFilter===''?' active':''}" data-vf="" style="--vf-color:#2A2622;">全部<span class="vf-count">${base.length}</span></button>`;
+  VISIT_FLAGS.forEach(f=>{
+    const n = base.filter(ev=>ev[f.field]).length;
+    html += `<button type="button" class="visit-filter-btn${activeVisitFilter===f.field?' active':''}" data-vf="${f.field}" style="--vf-color:${f.color};">${escapeHtml(f.label)}<span class="vf-count">${n}</span></button>`;
+  });
+  el.innerHTML = html;
+  el.querySelectorAll('.visit-filter-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      activeVisitFilter = btn.dataset.vf;
+      renderAdmin();
+    });
+  });
+}
+
 function renderAdmin(){
   renderStats();
   renderLegend();
+  renderVisitFilterRow();
   renderChangeLog();
   renderAdminMonthFilterRow();
   renderListView();
@@ -2500,7 +2598,7 @@ function buildSchoolOptionsWithHoursHTML(category){
     list.forEach(s=>{
       const school = DATA.schools.find(sc=>sc.name===s.name);
       const canonical = CANONICAL_SCHOOLS.find(c=>c.name===s.name);
-      const target = canonical ? canonical.targetHours : null;
+      const target = (school && Number(school.targetHours)) || (canonical ? canonical.targetHours : null);
       const filled = school ? (school.sessions||[]).reduce((sum,sess)=>sum+computeHours(sess.startTime,sess.endTime),0) : 0;
       const hoursLabel = target ? `（${fmtHoursTotal(filled)}/${target}h）` : '';
       html += `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}${hoursLabel}</option>`;
@@ -2525,7 +2623,16 @@ $('#goToSchoolFillBtn')&&$('#goToSchoolFillBtn')&&$('#goToSchoolFillBtn').addEve
   window.open(`/fill/${school.id}`, '_blank', 'noopener');
 });
 
+let activeVisitFilter = '';   // '' | visitPlanned | visitConfirmed | visitSuyu | visitEnjia | visitCommittee
+
 function matchesFilter(ev){
+  if(!matchesBaseFilter(ev)) return false;
+  if(activeVisitFilter && !ev[activeVisitFilter]) return false;
+  return true;
+}
+
+// 學校 / 類別 / 學期 三項篩選（不含訪視篩選；訪視篩選按鈕上的數字用這個算）
+function matchesBaseFilter(ev){
   const schoolName = $('#schoolNameFilter').value;
   if(schoolName && ev.schoolName !== schoolName) return false;
   const category = $('#categoryFilter').value;
@@ -2543,7 +2650,7 @@ function renderListView(){
   let events = getFilteredEventsFixed().sort((a,b)=>{
     const da = a.date||'9999', db = b.date||'9999';
     if(da!==db) return da<db?-1:1;
-    return (a.startTime||'').localeCompare(b.startTime||'');
+    return (a.startTime||'').localeCompare(b.startTime||'') || (a.schoolName||'').localeCompare(b.schoolName||'','zh-Hant');
   });
   if(activeAdminMonthFilter !== 'all'){
     events = events.filter(ev=>ev.date && ev.date.startsWith(activeAdminMonthFilter));
@@ -2551,13 +2658,28 @@ function renderListView(){
   const tbody = $('#listTbody');
   tbody.innerHTML = '';
   $('#listEmpty').style.display = events.length===0 ? 'block' : 'none';
+  const visitCounts = getSchoolVisitCounts();
+  const weekCounts = {};
+  events.forEach(ev=>{ const k = weekStartKey(ev.date); weekCounts[k] = (weekCounts[k]||0)+1; });
+  let prev = null;
   events.forEach(ev=>{
     const catColor = CATEGORY_COLORS[ev.category] || 'var(--ink-faint)';
+    const wk = weekStartKey(ev.date);
+    const newWeek = !prev || weekStartKey(prev.date) !== wk;
+    if(newWeek){
+      const hr = document.createElement('tr');
+      hr.className = 'week-header-row';
+      hr.innerHTML = `<td colspan="9">${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span></td>`;
+      tbody.appendChild(hr);
+    }
     const tr = document.createElement('tr');
+    // 同一週內：跟上一筆是「隔天」而且是「不同學校」→ 畫淺藍提示線（方便安排連續兩天的訪視行程）
+    const adjacentDiffSchool = !newWeek && prev && prev.date && ev.date && dayDiff(prev.date, ev.date)===1 && prev.schoolId!==ev.schoolId;
+    if(adjacentDiffSchool) tr.classList.add('adjacent-day-hint');
     tr.innerHTML = `
-      <td data-label="日期">${fmtDateDisplay(ev.date)}</td>
+      <td data-label="日期"${adjacentDiffSchool?' title="跟上一筆是相鄰的日子、不同學校"':''}>${fmtDateDisplay(ev.date)}</td>
       <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
-      <td data-label="學校"><span class="badge" style="background:${catColor};color:#fff;">${escapeHtml(ev.schoolName)}</span></td>
+      <td data-label="學校">${visitDiamondHTML(visitCounts[ev.schoolId])}<span class="badge" style="background:${catColor};color:#fff;">${escapeHtml(ev.schoolName)}</span></td>
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
       <td data-label="隨課老師">${escapeHtml(ev.companionTeacher||'（未填）')}</td>
       <td data-label="授課藝師">${escapeHtml(ev.instructor||'')}</td>
@@ -2566,7 +2688,49 @@ function renderListView(){
       <td data-label="訪視標記">${visitCheckboxesHTML(ev)}</td>
     `;
     tbody.appendChild(tr);
+    prev = ev;
   });
+}
+
+/* ---- 週次 / 日期小工具（星期一為一週的開始） ---- */
+function weekStartKey(dateStr){
+  if(!dateStr) return 'none';
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate() - ((dt.getDay()+6)%7));
+  return toDateKey(dt.getFullYear(), dt.getMonth()+1, dt.getDate());
+}
+function dayDiff(a, b){
+  const pa = a.split('-').map(Number), pb = b.split('-').map(Number);
+  return Math.round((Date.UTC(pb[0],pb[1]-1,pb[2]) - Date.UTC(pa[0],pa[1]-1,pa[2])) / 86400000);
+}
+function weekRangeLabel(wk){
+  if(wk==='none') return '未填日期';
+  const [y,m,d] = wk.split('-').map(Number);
+  const end = new Date(y, m-1, d+6);
+  return `${y}/${m}/${d}（一）～ ${end.getMonth()+1}/${end.getDate()}（日）`;
+}
+
+/* ---- 學校已訪視次數（以「訪視確定」計，同一天兩個時段算一次） ---- */
+function getSchoolVisitCounts(){
+  const map = {};
+  DATA.schools.forEach(sc=>{
+    const days = new Set((sc.sessions||[]).filter(s=>s.visitConfirmed).map(s=>s.date || ('nodate-'+s.id)));
+    map[sc.id] = days.size;
+  });
+  return map;
+}
+function visitDiamondHTML(n){
+  if(!n) return '';
+  const color = n>=3 ? '#D6332A' : (n===2 ? '#F08A24' : '#F29CB9');
+  return `<span class="visit-diamond" style="color:${color};" title="這所學校已訪視 ${n} 次">◆</span>`;
+}
+
+/* ---- 匯出用：訪視標記文字 ---- */
+function visitMarksText(ev){
+  return VISIT_FLAGS.filter(f=>ev[f.field])
+    .map(f=> (f.field==='visitCommittee' && ev.visitCommitteeName) ? `委員(${ev.visitCommitteeName})` : f.label)
+    .join('、');
 }
 
 // Long 授課內容 text gets truncated to ~18 chars with a "…展開" toggle so the
@@ -2583,17 +2747,79 @@ function contentCellHTML(content){
 
 // One-time delegated listener: handles every visit checkbox in the list,
 // including rows re-rendered later, since it's bound to the table body itself.
-$('#listTbody')&&$('#listTbody').addEventListener('change', (e)=>{
-  const t = e.target;
-  if(!t.matches || !t.matches('input[type=checkbox][data-field]')) return;
+const VISIT_DB_COLUMN = {
+  visitPlanned:'visit_planned', visitConfirmed:'visit_confirmed', visitSuyu:'visit_suyu',
+  visitEnjia:'visit_enjia', visitCommittee:'visit_committee'
+};
+
+function findSessionByDataset(t){
   const school = DATA.schools.find(s=>s.id===t.dataset.schoolId);
-  if(!school) return;
-  const session = (school.sessions||[]).find(s=>s.id===t.dataset.sessionId);
+  if(!school) return null;
+  return (school.sessions||[]).find(s=>s.id===t.dataset.sessionId) || null;
+}
+
+// Each tick is written straight to that one session row in the database
+// (not via the school-form saveData, which only ever saved a single school),
+// so every computer sees the same state after a reload / auto-refresh.
+$('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
+  const t = e.target;
+  if(!t.matches) return;
+
+  // --- 委員姓名輸入 ---
+  if(t.matches('input.committee-name-input')){
+    const session = findSessionByDataset(t);
+    if(!session) return;
+    const prevName = session.visitCommitteeName || '';
+    const name = t.value.trim();
+    if(name === prevName) return;
+    session.visitCommitteeName = name;
+    try{
+      await updateSession(session.id, {visit_committee_name: name});
+      showToast('✓ 委員姓名已儲存');
+      if(activeView==='cal') syncAdminCalToMonthFilter();
+    }catch(err){
+      session.visitCommitteeName = prevName;
+      t.value = prevName;
+      showToast('⚠️ 委員姓名儲存失敗（請確認已執行新增欄位的 SQL）：'+err.message);
+    }
+    return;
+  }
+
+  // --- 訪視打勾 ---
+  if(!t.matches('input[type=checkbox][data-field]')) return;
+  const session = findSessionByDataset(t);
   if(!session) return;
-  session[t.dataset.field] = t.checked;
-  scheduleVisitSave();
+  const field = t.dataset.field;
+  const prev = !!session[field];
+  const prevName = session.visitCommitteeName || '';
+  session[field] = t.checked;
+
+  const patch = { [VISIT_DB_COLUMN[field]]: t.checked };
+  const nameInput = (field==='visitCommittee') ? t.closest('.visit-check-group').querySelector('.committee-name-input') : null;
+  if(nameInput){
+    nameInput.style.display = t.checked ? '' : 'none';
+    if(t.checked) nameInput.focus();
+    if(!t.checked && prevName){            // 取消勾選時一併清掉姓名
+      session.visitCommitteeName = '';
+      nameInput.value = '';
+      patch.visit_committee_name = '';
+    }
+  }
+
   renderStats();
-  if(activeView==='cal') renderCalendar();
+  if(activeView==='cal') syncAdminCalToMonthFilter();
+  renderVisitFilterRow();
+  if(activeVisitFilter) renderListView();   // 篩選中取消勾選時，該列即時消失
+
+  try{
+    await updateSession(session.id, patch);
+    showToast('✓ 訪視標記已儲存');
+  }catch(err){
+    session[field] = prev;
+    session.visitCommitteeName = prevName;
+    showToast('⚠️ 儲存失敗，已還原：'+err.message);
+    renderAdmin();
+  }
 });
 
 // Click-to-expand for truncated 授課內容 cells in the list view.
@@ -2602,9 +2828,9 @@ $('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
   if(!cell) return;
   const expanded = cell.classList.toggle('expanded');
   if(expanded){
-    cell.innerHTML = cell.dataset.full + '<span class="content-toggle">收合</span>';
+    cell.innerHTML = escapeHtml(cell.dataset.full) + '<span class="content-toggle">收合</span>';
   }else{
-    cell.innerHTML = cell.dataset.short + '<span class="content-toggle">展開</span>';
+    cell.innerHTML = escapeHtml(cell.dataset.short) + '<span class="content-toggle">展開</span>';
   }
 });
 
@@ -2834,14 +3060,11 @@ function renderMonthList(){
   const titleEl = $('#monthListTitle');
   const bodyEl = $('#monthListBody');
 
-  $('#monthListAllBtn').classList.toggle('active', monthListFilter==='all');
-  $('#monthListConfirmedBtn').classList.toggle('active', monthListFilter==='confirmed');
 
   // Scope: the whole displayed month, narrowed to one day if selected.
   const monthPrefix = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
   let events = getFilteredEventsFixed().filter(ev=>ev.date && ev.date.startsWith(monthPrefix));
   if(selectedDayKey) events = events.filter(ev=>ev.date===selectedDayKey);
-  if(monthListFilter==='confirmed') events = events.filter(ev=>ev.visitConfirmed);
   events.sort((a,b)=>{
     if(a.date!==b.date) return a.date<b.date?-1:1;
     return (a.startTime||'').localeCompare(b.startTime||'');
@@ -2850,7 +3073,8 @@ function renderMonthList(){
   const scopeLabel = selectedDayKey
     ? `${fmtDateDisplay(selectedDayKey)} <button class="chip-link" id="clearDaySelectBtn" style="margin-left:6px;">(顯示整個月)</button>`
     : `${calYear} 年 ${calMonth+1} 月`;
-  const filterLabel = monthListFilter==='confirmed' ? '・僅訪視確定' : '';
+  const vf = VISIT_FLAGS.find(f=>f.field===activeVisitFilter);
+  const filterLabel = vf ? `・僅${vf.label}` : '';
   titleEl.innerHTML = `${scopeLabel}${filterLabel}（共 ${events.length} 場）`;
 
   const clearBtn = $('#clearDaySelectBtn');
@@ -2861,18 +3085,19 @@ function renderMonthList(){
     return;
   }
 
+  const visitCounts = getSchoolVisitCounts();
   bodyEl.innerHTML = events.map(ev=>{
     const catColor = CATEGORY_COLORS[ev.category] || 'var(--ink-soft)';
     const flags = VISIT_FLAGS.filter(f=>ev[f.field]);
     const order = getVisitOrderInfo(ev);
     const visitNumTag = order ? `<span class="repeat-tag">第${order.visitNumber}次訪視</span>` : '';
     const visitLine = (flags.length || visitNumTag)
-      ? `<div class="meta" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:3px;">${flags.map(f=>`<span style="display:inline-flex;align-items:center;gap:3px;color:${f.color};font-weight:700;"><span class="flag-dot" style="background:${f.color};"></span>${escapeHtml(f.label)}</span>`).join('')}${visitNumTag}</div>`
+      ? `<div class="meta" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:3px;">${flags.map(f=>`<span style="display:inline-flex;align-items:center;gap:3px;color:${f.color};font-weight:700;"><span class="flag-dot" style="background:${f.color};"></span>${escapeHtml(f.label)}${(f.field==='visitCommittee' && ev.visitCommitteeName) ? '：'+escapeHtml(ev.visitCommitteeName) : ''}</span>`).join('')}${visitNumTag}</div>`
       : '';
     return `<div class="ev-item">
       <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
       <div class="ev-main">
-        <a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
+        ${visitDiamondHTML(visitCounts[ev.schoolId])}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
         <div class="meta" style="margin-top:2px;">
           <span style="color:var(--ink-soft);">隨課老師：</span>${escapeHtml(ev.companionTeacher||'（未填）')}
           <span style="margin:0 4px;color:var(--ink-faint);">｜</span>
@@ -2886,8 +3111,6 @@ function renderMonthList(){
   }).join('');
 }
 
-$('#monthListAllBtn')&&$('#monthListAllBtn').addEventListener('click', ()=>{ monthListFilter='all'; renderMonthList(); });
-$('#monthListConfirmedBtn')&&$('#monthListConfirmedBtn').addEventListener('click', ()=>{ monthListFilter='confirmed'; renderMonthList(); });
 
 /* ---------------- export ---------------- */
 
@@ -2960,7 +3183,7 @@ $('#exportAllCsvBtn')&&$('#exportAllCsvBtn').addEventListener('click', ()=>{
   // is currently applied on screen — this is the "give me everything" button.
   const events = getAllEvents();
   if(events.length===0){ showToast('目前沒有任何已填寫的課程場次可匯出'); return; }
-  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容'];
+  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容','訪視標記'];
   const csvEscape = (v)=>{
     v = (v==null?'':String(v));
     if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
@@ -2969,7 +3192,7 @@ $('#exportAllCsvBtn')&&$('#exportAllCsvBtn').addEventListener('click', ()=>{
   const rows = events
     .sort((a,b)=> (a.schoolName||'').localeCompare(b.schoolName||'','zh-Hant') || (a.date||'').localeCompare(b.date||''))
     .map(ev=>[
-      ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.companionTeacher, ev.instructor, ev.location, ev.content
+      ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.companionTeacher, ev.instructor, ev.location, ev.content, visitMarksText(ev)
     ].map(csvEscape).join(','));
   const csv = '\uFEFF' + header.join(',') + '\r\n' + rows.join('\r\n');
   downloadFile('全部學校課程期程表.csv', csv, 'text/csv;charset=utf-8');
@@ -2987,14 +3210,14 @@ $('#exportIcsBtn')&&$('#exportIcsBtn').addEventListener('click', ()=>{
 $('#exportCsvBtn')&&$('#exportCsvBtn').addEventListener('click', ()=>{
   const events = getFilteredEventsFixed();
   if(events.length===0){ showToast('目前篩選條件下沒有可匯出的場次'); return; }
-  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容'];
+  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容','訪視標記'];
   const csvEscape = (v)=>{
     v = (v==null?'':String(v));
     if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
     return v;
   };
   const rows = events.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(ev=>[
-    ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.companionTeacher, ev.instructor, ev.location, ev.content
+    ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.companionTeacher, ev.instructor, ev.location, ev.content, visitMarksText(ev)
   ].map(csvEscape).join(','));
   const csv = '\uFEFF' + header.join(',') + '\r\n' + rows.join('\r\n');
   downloadFile('課程期程表彙整.csv', csv, 'text/csv;charset=utf-8');
@@ -3015,7 +3238,7 @@ function dbRowToSession(r){
     studentGrades: r.student_grades||[], location: r.location||'', content: r.content||'',
     visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
     visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
-    visitCommittee: r.visit_committee||false, locked: r.locked||false
+    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', locked: r.locked||false
   };
 }
 
@@ -3082,8 +3305,6 @@ async function saveData(){
         date:s.date||null, start_time:s.startTime||null, end_time:s.endTime||null,
         companion_teacher:s.companionTeacher||'', instructor:s.instructor||'',
         student_grades:s.studentGrades||[], location:s.location||'', content:s.content||'',
-        visit_planned:!!s.visitPlanned, visit_confirmed:!!s.visitConfirmed,
-        visit_suyu:!!s.visitSuyu, visit_enjia:!!s.visitEnjia, visit_committee:!!s.visitCommittee,
         locked:!!s.locked, sort_order:i
       }));
       await upsertSessions(rows);
@@ -3108,6 +3329,49 @@ async function saveData(){
     showToast('⚠️ 儲存失敗：'+e.message);
     return false;
   }
+}
+
+/* ================= 總覽頁：重新載入最新資料（跨電腦同步） ================= */
+
+let _adminLoadedAt = Date.now();
+let _adminReloading = false;
+let _adminDataSig = '';
+function adminDataSig(){ return JSON.stringify([DATA.schools, DATA.changeLog]); }
+async function reloadAdminData(manual){
+  if(_adminReloading) return;
+  _adminReloading = true;
+  try{
+    const before = adminDataSig();
+    await loadData();
+    _adminLoadedAt = Date.now();
+    const after = adminDataSig();
+    // 自動同步時，資料沒變就不重畫（避免畫面每分鐘閃一下、展開的內容被收起）
+    if(manual || after !== before){
+      if(typeof refreshAdminSchoolNameOptions==='function') refreshAdminSchoolNameOptions();
+      renderAdmin();
+    }
+    if(manual) showToast('✓ 已載入最新資料');
+  }catch(e){
+    if(manual) showToast('重新載入失敗：'+e.message);
+  }
+  _adminReloading = false;
+}
+
+function setupAdminAutoSync(){
+  const btn = $('#refreshDataBtn');
+  if(btn) btn.addEventListener('click', ()=>reloadAdminData(true));
+  const typing = ()=>{
+    const a = document.activeElement;
+    return a && a.classList && a.classList.contains('committee-name-input');
+  };
+  // 切回這個分頁時，如果資料超過 15 秒沒更新就自動重抓
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && !typing() && Date.now()-_adminLoadedAt > 15000) reloadAdminData(false);
+  });
+  // 分頁開著時，每 60 秒自動同步一次（正在輸入委員姓名時先跳過，避免打到一半被洗掉）
+  setInterval(()=>{
+    if(document.visibilityState==='visible' && !typing()) reloadAdminData(false);
+  }, 60000);
 }
 
 /* ================= init ================= */
@@ -3145,6 +3409,7 @@ async function init(){
     }else{
       if(typeof refreshAdminSchoolNameOptions==='function') refreshAdminSchoolNameOptions();
       renderAdmin();
+      setupAdminAutoSync();
     }
   }catch(e){
     console.error('init error', e);
