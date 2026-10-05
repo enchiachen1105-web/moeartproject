@@ -104,6 +104,36 @@
 
   select:disabled, input:disabled{background:var(--bg); color:var(--ink-soft); cursor:not-allowed; opacity:.85;}
   .session-card.locked-card{background:#F6F2EC;}
+  .session-head{gap:10px;}
+  .session-head .label{flex:1; min-width:0; overflow:hidden;}
+  .sum-text{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block; max-width:calc(100% - 28px); vertical-align:bottom;}
+  .session-card.collapsed{padding:9px 14px; background:#F6F2EC;}
+  .session-card.collapsed .session-head{margin-bottom:0;}
+  .session-card.collapsed .session-editor{display:none;}
+  .session-card.collapsed .session-head .label{cursor:pointer;}
+  .sum-date{font-weight:700; color:var(--ink);}
+  .sum-time{color:var(--ink-soft); margin:0 10px;}
+  .sum-main{color:var(--ink-soft); font-weight:400;}
+  .sum-tag-pill{font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; white-space:nowrap;}
+  .sum-tag-pill.changed{background:#FDEBD8; color:#A3501C;}
+  .sum-tag-pill.new{background:#E3F2EF; color:#1F6F66;}
+  .auto-hint{font-size:12px; color:var(--teal); margin-top:4px; min-height:16px;}
+  .save-bar{position:sticky; bottom:0; z-index:20; background:var(--surface); border-top:1px solid var(--border); padding:12px 0 2px; margin-top:12px;}
+  .save-status{margin-right:auto; font-size:13px; color:var(--ink-faint);}
+  .save-status.dirty{color:#C0392B; font-weight:700;}
+  .review-section{margin:0 0 14px;}
+  .review-section h4{font-size:14px; margin:0 0 6px;}
+  .review-list{margin:0; padding-left:20px; font-size:13.5px; line-height:1.8;}
+  .review-issue{color:#A3501C; cursor:pointer; text-decoration:underline dotted;}
+  .review-quick{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
+  .review-quick button{font-size:12px; padding:3px 10px; border:1px solid var(--border); border-radius:99px; background:#fff; cursor:pointer; font-family:inherit;}
+  .field-err{color:#C0392B; font-size:12.5px; margin-top:4px;}
+  .help-card ol{margin:0; padding-left:20px; line-height:1.85; font-size:14px;}
+  @media (max-width:720px){
+    .session-head{flex-wrap:wrap;}
+    .session-head .label{flex-basis:100%;}
+    .sum-text{max-width:100%; white-space:normal;}
+  }
   .lock-note{font-size:11.5px; color:var(--ink-faint); display:flex; align-items:center; gap:4px;}
 
   .multi-entry-section{margin-bottom:16px;}
@@ -303,6 +333,31 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="saveReviewModal" style="display:none;">
+  <div class="modal-box" style="max-width:540px; max-height:86vh; overflow:auto;">
+    <h3 id="saveReviewTitle" style="margin-top:0;">確認儲存</h3>
+    <div id="saveReviewIssues"></div>
+    <div id="saveReviewChanges"></div>
+    <div id="saveReviewReasonWrap" class="review-section" style="display:none;">
+      <h4>修改原因<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（一次說明即可，會套用到這次所有修改）</span></h4>
+      <div class="review-quick">
+        <button type="button" data-r="學校有活動">學校有活動</button>
+        <button type="button" data-r="師資時間安排">師資時間安排</button>
+        <button type="button" data-r="教師生病">教師生病</button>
+        <button type="button" data-r="天候因素">天候因素</button>
+        <button type="button" data-r="表單填錯">表單填錯</button>
+      </div>
+      <textarea id="saveReviewReason" rows="2" placeholder="例：學校有活動，課程往後調一週"></textarea>
+      <div class="field-err" id="saveReviewReasonErr"></div>
+    </div>
+    <p id="saveReviewNote" style="font-size:13px; color:var(--ink-soft); line-height:1.7; margin:0 0 14px;"></p>
+    <div class="btn-row" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" id="saveReviewCancelBtn">返回修改</button>
+      <button class="btn btn-primary" id="saveReviewOkBtn">確認儲存</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="confirmModal" style="display:none;">
   <div class="modal-box">
     <p id="confirmModalText" style="margin:0 0 16px; white-space:pre-line; line-height:1.7;"></p>
@@ -316,9 +371,23 @@
   <div class="top-bar"><div class="brand">教育部 · 藝師藝有計畫 115學年度</div></div>
   <div id="loading" class="loading-msg">載入資料中…</div>
   <div id="content" style="display:none;">
-    <div class="card" style="margin-bottom:0;padding:14px 20px;display:flex;align-items:center;gap:12px;">
+    <div class="card" style="margin-bottom:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;">
       <span id="bannerCategory" class="badge"></span>
       <span id="bannerName" style="font-size:17px;font-weight:700;"></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="fillHelpOpenBtn" style="margin-left:auto;">❔ 使用說明</button>
+    </div>
+    <div class="card help-card" id="fillHelpCard" style="padding:16px 20px; background:#FFFBF3; border-color:#EBD9B8;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+        <div>
+          <div style="font-weight:700; margin-bottom:6px;">老師您好，這個頁面這樣使用：</div>
+          <ol>
+            <li><b>確認</b>：下方是已幫您建好的課程場次，請確認日期、時間、藝師與內容是否正確。</li>
+            <li><b>修改或新增</b>：點「編輯」就能修改；每週同樣的課可以按「複製」，日期會自動帶入下一週。</li>
+            <li><b>儲存</b>：完成後按最下方「儲存課程期程表」。如果修改了已儲存過的內容，系統會請您簡單說明原因。</li>
+          </ol>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="fillHelpCloseBtn">我知道了</button>
+      </div>
     </div>
     <div class="card" id="schoolPickerCard">
         <div class="card-title"><span class="num">1</span>選擇學校</div>
@@ -447,8 +516,9 @@
           </div>
         </div>
 
-        <div class="btn-row" style="justify-content:flex-end; gap:10px;">
-          <button class="btn btn-ghost" id="unlockAllBtn">🔓 一鍵解鎖全部</button>
+        <div class="btn-row save-bar" style="justify-content:flex-end; gap:10px;">
+          <span class="save-status" id="saveStatusText"></span>
+          <button class="btn btn-ghost" id="unlockAllBtn">📂 全部展開</button>
           <button class="btn btn-primary" id="saveBtn">💾 儲存課程期程表</button>
         </div>
       </div>
@@ -589,6 +659,8 @@ async function updateSession(sessionId, patch) {
 // 115學年度計畫期程：2026.08.01 - 2027.06.30
 const PROGRAM_START = {y:2026, m:7};  // m is 0-indexed: 7 = August
 const PROGRAM_END   = {y:2027, m:5};  // 5 = June
+const PROGRAM_FIRST_DAY = '2026-08-01';
+const PROGRAM_LAST_DAY  = '2027-06-30';
 
 // 上學期只落在這些年月／下學期只落在這些年月 — drives the
 // 上課日期 year/month/day dropdowns so other years/months are never selectable.
@@ -746,6 +818,7 @@ function monthsForSemesterYear(semester, year){
 // in that list (e.g. removed after the session was set), it's still shown
 // as a trailing extra option so the data isn't silently lost from view.
 function buildPersonOptionsHTML(list, currentValue){
+  if(currentValue === '__new__') currentValue = '';
   const items = (Array.isArray(list) ? list : []).filter(Boolean);
   let html = '<option value="">請選擇…</option>';
   items.forEach(name=>{
@@ -754,6 +827,7 @@ function buildPersonOptionsHTML(list, currentValue){
   if(currentValue && !items.includes(currentValue)){
     html += `<option value="${escapeHtml(currentValue)}" selected>${escapeHtml(currentValue)}（非現有名單）</option>`;
   }
+  html += '<option value="__new__">＋ 新增人名…</option>';
   return html;
 }
 
@@ -772,10 +846,44 @@ function refreshSessionPersonOptions(){
   });
 }
 
+/* ---------------- 下拉選單直接「＋新增人名」 ---------------- */
+
+function addPersonToList(key, name){
+  if(!getSimpleListValues(key).includes(name)){
+    const cfg = SIMPLE_LIST_CONFIG[key];
+    $(`#${cfg.rowsId}`).appendChild(buildSimpleListRow(key, name));
+    applyBasicInfoFieldLock();
+    refreshSimpleListSummary(key);
+  }
+  refreshSessionPersonOptions();
+}
+$('#sessionList')&&$('#sessionList').addEventListener('focusin', (e)=>{
+  const t = e.target;
+  if(t.matches && t.matches('select.s-companion, select.instructor-select')) t.dataset.prev = t.value;
+});
+$('#sessionList')&&$('#sessionList').addEventListener('change', (e)=>{
+  const sel = e.target;
+  if(!sel.matches || !sel.matches('select.s-companion, select.instructor-select')) return;
+  if(sel.value !== '__new__'){ sel.dataset.prev = sel.value; return; }
+  const key = sel.classList.contains('s-companion') ? 'teachers' : 'artists';
+  const name = (window.prompt(key==='artists' ? '請輸入要新增的授課藝師姓名' : '請輸入要新增的隨課老師姓名') || '').trim();
+  const card = sel.closest('.session-card');
+  if(!name){
+    sel.value = sel.dataset.prev || '';
+  }else{
+    addPersonToList(key, name);
+    sel.value = name;
+    sel.dataset.prev = name;
+    setFormDirty(true);
+    showToast(`已新增「${name}」，也一併加入學校基本資料的名單`);
+  }
+  if(card) refreshSessionSummary(card);
+});
+
 /* ---------------- per-session 授課藝師（多筆） ---------------- */
 
 function getSessionInstructorValues(wrap){
-  return Array.from(wrap.querySelectorAll('.instructor-rows .instructor-select')).map(s=>s.value).filter(Boolean);
+  return Array.from(wrap.querySelectorAll('.instructor-rows .instructor-select')).map(s=>s.value).filter(v=>v && v!=='__new__');
 }
 
 function buildInstructorRow(wrap, selectedName){
@@ -855,6 +963,8 @@ function refreshSessionGradeOptions(){
 }
 
 function setSessionDate(wrap, dateStr){
+  const el = wrap.querySelector('.s-date');
+  if(el){ el.value = (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : ''; return; }
   const semester = wrap.querySelector('.s-semester').value;
   const ySel = wrap.querySelector('.s-date-y');
   const mSel = wrap.querySelector('.s-date-m');
@@ -885,6 +995,13 @@ function setSessionDate(wrap, dateStr){
 // adding a new session while a month tab is active) — only the day stays
 // pickable, so adding several sessions in the same month is one click faster.
 function restrictDateToSingleMonth(wrap, y, m){
+  const el = wrap.querySelector('.s-date');
+  if(el){
+    el.min = toDateKey(y, m, 1);
+    el.max = toDateKey(y, m, daysInMonth(y, m));
+    wrap.dataset.restrictMonth = `${y}-${String(m).padStart(2,'0')}`;
+    return;
+  }
   const ySel = wrap.querySelector('.s-date-y');
   const mSel = wrap.querySelector('.s-date-m');
   const dSel = wrap.querySelector('.s-date-d');
@@ -921,6 +1038,8 @@ function onDateMonthChange(wrap){
 }
 
 function getSessionDateValue(wrap){
+  const el = wrap.querySelector('.s-date');
+  if(el){ return /^\d{4}-\d{2}-\d{2}$/.test(el.value) ? el.value : ''; }
   const y = wrap.querySelector('.s-date-y').value;
   const m = wrap.querySelector('.s-date-m').value;
   const d = wrap.querySelector('.s-date-d').value;
@@ -939,7 +1058,24 @@ function updateSessionWeekday(wrap){
   if(!dateStr){ el.textContent = ''; return; }
   const [y,m,d] = dateStr.split('-').map(Number);
   const dow = new Date(y, m-1, d).getDay();
-  el.textContent = `（週${WEEKDAY_LABELS[dow]}）`;
+  el.textContent = `星期${WEEKDAY_LABELS[dow]}・${deriveSemester(dateStr)}`;
+}
+
+// 8月～1月＝上學期，2月～6月＝下學期
+function deriveSemester(dateStr){
+  if(!dateStr) return '';
+  const m = Number(dateStr.split('-')[1]);
+  return (m>=8 || m<=1) ? '上學期' : '下學期';
+}
+function shortDateLabel(dateStr){
+  if(!dateStr) return '未選日期';
+  const [y,m,d] = dateStr.split('-').map(Number);
+  return `${m}/${d}（${WEEKDAY_LABELS[new Date(y,m-1,d).getDay()]}）`;
+}
+function addDaysToKey(dateStr, n){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m-1, d+n);
+  return toDateKey(dt.getFullYear(), dt.getMonth()+1, dt.getDate());
 }
 
 // Builds a <option>/<optgroup> time picker covering 06:00–21:00 in 10-minute
@@ -1048,14 +1184,22 @@ let currentSchoolRef = null; // the live school object backing the open form
 
 // 有未儲存的修改時，老師關閉分頁或重新整理前會先跳出瀏覽器提醒
 let formDirty = false;
+function setFormDirty(v){
+  formDirty = !!v;
+  const el = document.getElementById('saveStatusText');
+  if(el){
+    el.textContent = formDirty ? '● 有尚未儲存的修改' : '✓ 內容都已儲存';
+    el.classList.toggle('dirty', formDirty);
+  }
+}
 (function setupUnsavedWarning(){
   const fa = document.getElementById('formArea');
   if(!fa) return;
-  const mark = (e)=>{ if(e.isTrusted) formDirty = true; };
+  const mark = (e)=>{ if(e.isTrusted) setFormDirty(true); };
   fa.addEventListener('input', mark);
   fa.addEventListener('change', mark);
   fa.addEventListener('click', (e)=>{
-    if(e.isTrusted && e.target.closest('.removeSessionBtn, .removeEntryBtn, .addGradeBtn, .addInstructorBtn, #addSessionBtn, #addArtistBtn, #addTeacherBtn, #addStudentGroupBtn')) formDirty = true;
+    if(e.isTrusted && e.target.closest('.removeEntryBtn, .addGradeBtn, .addInstructorBtn, #addArtistBtn, #addTeacherBtn, #addStudentGroupBtn')) setFormDirty(true);
   });
   window.addEventListener('beforeunload', (e)=>{
     if(!formDirty) return;
@@ -1095,7 +1239,9 @@ function loadFormFor(school){
   else if(typeof syncCalToMonthFilter==='function') syncCalToMonthFilter();
   const bcb = $('#bottomCalBody');
   if(bcb && bcb.style.display!=='none' && typeof renderBottomCalendar==='function') renderBottomCalendar();
-  formDirty = false;
+  basicInfoSnapshot = JSON.stringify(readBasicInfo());
+  updateExpandAllLabel();
+  setFormDirty(false);
 }
 
 /* ---------------- multi-entry sections: 配合藝師 / 隨課老師 ---------------- */
@@ -1255,18 +1401,10 @@ function setBasicInfoLockState(locked){
 }
 
 $('#basicInfoEditBtn')&&$('#basicInfoEditBtn').addEventListener('click', ()=>{
-  openEditReasonModal((reason)=>{
-    currentBasicInfoEditReason = reason;
-    setBasicInfoLockState(false);
-    showToast('已解鎖學校基本資料，修改完成後記得儲存');
-  });
+  setBasicInfoLockState(false);
+  showToast('已開放修改學校基本資料，改好後按最下方「儲存課程期程表」');
 });
-$('#basicInfoSaveBtn')&&$('#basicInfoSaveBtn').addEventListener('click', ()=>{
-  openConfirmModal('確認儲存學校基本資料的修改？', async ()=>{
-    if(!currentSchoolRef){ showToast('找不到此學校資料，請重新整理頁面後再試'); return; }
-    await commitSaveSchool(currentSchoolRef);
-  });
-});
+$('#basicInfoSaveBtn')&&$('#basicInfoSaveBtn').addEventListener('click', ()=>openSaveReview());
 let currentBasicInfoEditReason = null;
 
 function addSessionRow(data, opts){
@@ -1277,74 +1415,66 @@ function addSessionRow(data, opts){
   wrap.dataset.id = data.id || uid();
   wrap.innerHTML = `
     <div class="session-head">
-      <span class="label"><span class="session-num">1.</span> 課程場次</span>
-      <span class="btn-row" style="gap:10px;">
-        <span class="lock-note" style="display:none;">🔒 已鎖定</span>
-        <button type="button" class="btn btn-ghost btn-sm editSessionBtn" style="display:none;">✏️ 修改</button>
-        <button type="button" class="btn-danger-text lockedRemoveBtn" style="display:none;">移除</button>
-        <button type="button" class="btn btn-primary btn-sm saveSessionBtn" style="display:none;">💾 儲存</button>
-        <span class="conflict-badge" title="這筆與下方另一筆場次的日期、時間重疊">■ 時間重複</span>
+      <span class="label"><span class="session-num">1.</span> <span class="sum-text">課程場次</span></span>
+      <span class="btn-row" style="gap:8px;">
+        <span class="sum-tag"></span>
+        <span class="conflict-badge" title="這筆與另一筆場次的日期、時間重疊">■ 時間重複</span>
         <span class="session-hours"></span>
+        <button type="button" class="btn btn-ghost btn-sm editSessionBtn">編輯</button>
+        <button type="button" class="btn btn-primary btn-sm doneSessionBtn">完成</button>
+        <button type="button" class="btn btn-ghost btn-sm copySessionBtn" title="複製成新的一筆，日期自動帶入下一週同一天">複製</button>
         <button type="button" class="btn-danger-text removeSessionBtn">移除</button>
       </span>
     </div>
-    <div class="grid-row grid-4">
-      <div>
-        <label>學期</label>
-        <select class="s-semester">
-          <option value="上學期">上學期</option>
-          <option value="下學期">下學期</option>
-        </select>
-      </div>
-      <div>
-        <label>上課日期</label>
-        <div style="display:flex; gap:4px; align-items:center;">
-          <select class="s-date-y" style="flex:1.1;"></select>
-          <select class="s-date-m" style="flex:0.8;"></select>
-          <select class="s-date-d" style="flex:0.8;"></select>
-          <span class="s-weekday" style="flex:0 0 auto; font-size:12.5px; color:var(--ink-soft); white-space:nowrap; min-width:34px;"></span>
+    <div class="session-editor">
+      <div class="grid-row grid-3">
+        <div>
+          <label>上課日期</label>
+          <input type="date" class="s-date" min="${PROGRAM_FIRST_DAY}" max="${PROGRAM_LAST_DAY}">
+          <input type="hidden" class="s-semester">
+          <div class="s-weekday auto-hint"></div>
+        </div>
+        <div>
+          <label>開始時間</label>
+          <input type="time" class="s-start" step="60">
+        </div>
+        <div>
+          <label>結束時間</label>
+          <input type="time" class="s-end" step="60">
         </div>
       </div>
-      <div>
-        <label>開始時間</label>
-        <input type="time" class="s-start" step="60">
-      </div>
-      <div>
-        <label>結束時間</label>
-        <input type="time" class="s-end" step="60">
-      </div>
-    </div>
-    <div class="grid-row grid-2">
-      <div>
-        <label>隨課老師</label>
-        <select class="s-companion"></select>
-      </div>
-      <div>
-        <label>授課藝師<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（可新增多位）</span></label>
-        <div class="instructor-rows"></div>
-        <button type="button" class="btn btn-ghost btn-sm addInstructorBtn">＋ 新增藝師</button>
-      </div>
-    </div>
-    <div class="grid-row grid-2">
-      <div>
-        <label>學生年級/人數</label>
-        <div class="grade-rows"></div>
-        <div class="btn-row" style="gap:10px; align-items:center;">
-          <button type="button" class="btn btn-ghost btn-sm addGradeBtn">＋ 新增年級</button>
-          <span class="grade-total-text" style="font-size:12px; color:var(--ink-faint);">尚未選擇年級</span>
+      <div class="grid-row grid-2">
+        <div>
+          <label>隨課老師</label>
+          <select class="s-companion"></select>
+        </div>
+        <div>
+          <label>授課藝師<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（可新增多位）</span></label>
+          <div class="instructor-rows"></div>
+          <button type="button" class="btn btn-ghost btn-sm addInstructorBtn">＋ 新增藝師</button>
         </div>
       </div>
-      <div>
-        <label>上課地點</label>
-        <input type="text" class="s-location" placeholder="例：校內美術教室 /校外○○工作室">
+      <div class="grid-row grid-2">
+        <div>
+          <label>學生年級/人數</label>
+          <div class="grade-rows"></div>
+          <div class="btn-row" style="gap:10px; align-items:center;">
+            <button type="button" class="btn btn-ghost btn-sm addGradeBtn">＋ 新增年級</button>
+            <span class="grade-total-text" style="font-size:12px; color:var(--ink-faint);">尚未選擇年級</span>
+          </div>
+        </div>
+        <div>
+          <label>上課地點</label>
+          <input type="text" class="s-location" placeholder="例：校內美術教室 /校外○○工作室">
+        </div>
       </div>
-    </div>
-    <div style="margin-bottom:14px;">
-      <label>上課內容</label>
-      <input type="text" class="s-content" placeholder="例：○○教學，簡短說明教學內容">
+      <div style="margin-bottom:6px;">
+        <label>上課內容</label>
+        <input type="text" class="s-content" placeholder="例：○○教學，簡短說明教學內容">
+      </div>
     </div>
   `;
-  wrap.querySelector('.s-semester').value = data.semester || '上學期';
+  wrap.querySelector('.s-semester').value = data.semester || deriveSemester(data.date) || '上學期';
   setSessionDate(wrap, data.date || '');
   if(opts.restrictToMonth){
     restrictDateToSingleMonth(wrap, opts.restrictToMonth.y, opts.restrictToMonth.m);
@@ -1374,87 +1504,172 @@ function addSessionRow(data, opts){
     refreshSessionGradeTotal(wrap);
   });
 
+  // 移除：已儲存過的場次，原因等按「儲存」時再一次說明
   wrap.querySelector('.removeSessionBtn').addEventListener('click', ()=>{
-    openConfirmModal('確認移除這筆課程場次？', ()=>{
-      if(wrap.dataset.everLocked === 'true'){
-        pendingDeletions.push({sessionId: wrap.dataset.id, reason: wrap.dataset.editReason || '（未提供原因）'});
+    const wasSaved = wrap.dataset.everLocked === 'true';
+    openConfirmModal(
+      wasSaved ? '確定要移除這筆已儲存的課程場次嗎？\n按下方「儲存課程期程表」時，系統會請您說明移除原因。' : '確定移除這筆課程場次？',
+      ()=>{
+        if(wasSaved){
+          const o = wrap._orig || readSessionValues(wrap);
+          pendingDeletions.push({sessionId: wrap.dataset.id, reason: null, label: `${shortDateLabel(o.date)} ${o.startTime||''}${o.endTime?'–'+o.endTime:''}`.trim()});
+        }
+        wrap.remove();
+        renumberSessions();
+        checkSessionOverlaps();
+        recalcTotals();
+        updateExpandAllLabel();
+        setFormDirty(true);
       }
-      wrap.remove();
-      renumberSessions();
-      checkSessionOverlaps();
-      recalcTotals();
-    });
+    );
   });
   wrap.querySelector('.s-start').addEventListener('change', ()=>{ updateRowHours(wrap); checkSessionOverlaps(); });
   wrap.querySelector('.s-end').addEventListener('change', ()=>{ updateRowHours(wrap); checkSessionOverlaps(); });
-  wrap.querySelector('.s-date-y').addEventListener('change', ()=>{ onDateYearChange(wrap); checkSessionOverlaps(); applySessionMonthFilter(); updateSessionWeekday(wrap); });
-  wrap.querySelector('.s-date-m').addEventListener('change', ()=>{ onDateMonthChange(wrap); checkSessionOverlaps(); applySessionMonthFilter(); updateSessionWeekday(wrap); });
-  wrap.querySelector('.s-date-d').addEventListener('change', ()=>{ checkSessionOverlaps(); applySessionMonthFilter(); updateSessionWeekday(wrap); });
-  wrap.querySelector('.s-semester').addEventListener('change', ()=>{
-    const hadDate = !!getSessionDateValue(wrap);
-    setSessionDate(wrap, '');
-    if(hadDate) showToast('已切換學期，上課日期已清空，請重新選擇');
+  wrap.querySelector('.s-date').addEventListener('change', ()=>{
+    const d = getSessionDateValue(wrap);
+    if(d) wrap.querySelector('.s-semester').value = deriveSemester(d);
+    updateSessionWeekday(wrap);
     checkSessionOverlaps();
     applySessionMonthFilter();
+    if(d && activeMonthFilter!=='all' && d.slice(0,7)!==activeMonthFilter){
+      showToast(`這筆改到 ${Number(d.slice(5,7))} 月了，切到「${Number(d.slice(5,7))}月」頁籤就看得到`);
+    }
   });
-  wrap.querySelector('.editSessionBtn').addEventListener('click', ()=>{
-    openEditReasonModal((reason)=>{
-      wrap.dataset.editReason = reason;
-      setRowLockState(wrap, false);
-      showToast('已解鎖這筆場次，修改完成後記得儲存');
-    });
+  wrap.querySelector('.editSessionBtn').addEventListener('click', ()=>setRowCollapsed(wrap, false));
+  wrap.querySelector('.doneSessionBtn').addEventListener('click', ()=>{ setRowCollapsed(wrap, true); applySessionMonthFilter(); });
+  wrap.querySelector('.copySessionBtn').addEventListener('click', ()=>copySessionRow(wrap));
+  wrap.querySelector('.session-head .label').addEventListener('click', ()=>{
+    if(wrap.classList.contains('collapsed')) setRowCollapsed(wrap, false);
   });
-  wrap.querySelector('.lockedRemoveBtn').addEventListener('click', ()=>{
-    openEditReasonModal((reason)=>{
-      // Record the deletion (logged at next save) then remove the card.
-      pendingDeletions.push({sessionId: wrap.dataset.id, reason: reason});
-      wrap.remove();
-      renumberSessions();
-      checkSessionOverlaps();
-      recalcTotals();
-      applySessionMonthFilter();
-      // Persist immediately so the removal is saved without needing another edit.
-      if(currentSchoolRef) commitSaveSchool(currentSchoolRef);
-    }, {
-      title: '移除原因',
-      help: '這筆場次已經儲存過。請說明移除的原因，方便主辦方追蹤異動內容。',
-      confirmText: '確認移除',
-      requireMsg: '請填寫移除原因'
-    });
-  });
-  wrap.querySelector('.saveSessionBtn').addEventListener('click', ()=>{
-    openConfirmModal('確認儲存這筆課程場次的修改？', async ()=>{
-      if(!currentSchoolRef){ showToast('找不到此學校資料，請重新整理頁面後再試'); return; }
-      await commitSaveSchool(currentSchoolRef);
-    });
-  });
+  wrap.addEventListener('input', ()=>refreshSessionSummary(wrap));
+  wrap.addEventListener('change', ()=>refreshSessionSummary(wrap));
 
   wrap.dataset.everLocked = data.locked ? 'true' : 'false';
-  setRowLockState(wrap, !!data.locked);
 
   $('#sessionList').appendChild(wrap);
   updateRowHours(wrap);
+  if(data.locked) wrap._orig = readSessionValues(wrap);
+  setRowCollapsed(wrap, !!data.locked);
   renumberSessions();
   checkSessionOverlaps();
   applySessionMonthFilter();
+  return wrap;
 }
 
-// Toggles whether a session card's fields can be edited. Locked cards show
-// a "✏️ 修改" button instead of a remove button — editing/removing a
-// previously-saved session requires going through the reason modal first.
-function setRowLockState(wrap, locked){
-  wrap.querySelectorAll('select, input[type=text], input[type=time]').forEach(f=>{ f.disabled = locked; });
-  wrap.classList.toggle('locked-card', locked);
-  wrap.querySelector('.lock-note').style.display = locked ? 'inline-flex' : 'none';
-  wrap.querySelector('.editSessionBtn').style.display = locked ? 'inline-flex' : 'none';
-  wrap.querySelector('.lockedRemoveBtn').style.display = locked ? 'inline-flex' : 'none';
-  wrap.querySelector('.saveSessionBtn').style.display = locked ? 'none' : 'inline-flex';
-  wrap.querySelector('.removeSessionBtn').style.display = locked ? 'none' : 'inline-flex';
-  wrap.querySelector('.addGradeBtn').style.display = locked ? 'none' : 'inline-flex';
-  wrap.querySelectorAll('.grade-rows .removeEntryBtn').forEach(b=>{ b.style.display = locked ? 'none' : 'inline-flex'; });
-  wrap.querySelectorAll('.instructor-rows .removeEntryBtn').forEach(b=>{ b.style.display = locked ? 'none' : 'inline-flex'; });
-  const addArtistBtn = wrap.querySelector('.addInstructorBtn');
-  if(addArtistBtn) addArtistBtn.style.display = locked ? 'none' : 'inline-flex';
+/* ---------------- 場次卡片：收合摘要／比對修改／複製 ---------------- */
+
+function readSessionValues(r){
+  const comp = r.querySelector('.s-companion').value;
+  return {
+    semester: r.querySelector('.s-semester').value,
+    date: getSessionDateValue(r),
+    startTime: r.querySelector('.s-start').value,
+    endTime: r.querySelector('.s-end').value,
+    companionTeacher: (comp==='__new__' ? '' : comp).trim(),
+    instructor: getSessionInstructorValues(r).join('、'),
+    studentGrades: getSessionGradeValues(r),
+    location: r.querySelector('.s-location').value.trim(),
+    content: r.querySelector('.s-content').value.trim()
+  };
+}
+
+function isBlankSession(v){
+  return !(v.date || v.startTime || v.endTime || v.companionTeacher || v.instructor || v.location || v.content ||
+           (Array.isArray(v.studentGrades) && v.studentGrades.length>0));
+}
+
+// 已儲存過的場次：跟載入時相比，改了哪些欄位（開始/結束時間合併成「時間」）
+function changedFieldLabels(wrap){
+  if(!wrap._orig) return [];
+  const cur = readSessionValues(wrap);
+  const out = [];
+  Object.keys(SESSION_FIELD_LABELS).forEach(k=>{
+    if(k==='semester') return;
+    const a = wrap._orig[k], b = cur[k];
+    const as = Array.isArray(a) ? a.join('、') : String(a||'');
+    const bs = Array.isArray(b) ? b.join('、') : String(b||'');
+    if(as !== bs){
+      const label = (k==='startTime' || k==='endTime') ? '時間' : SESSION_FIELD_LABELS[k];
+      if(!out.includes(label)) out.push(label);
+    }
+  });
+  return out;
+}
+
+function refreshSessionSummary(wrap){
+  const collapsed = wrap.classList.contains('collapsed');
+  const v = readSessionValues(wrap);
+  const sumEl = wrap.querySelector('.sum-text');
+  if(collapsed){
+    const timePart = (v.startTime && v.endTime) ? `${v.startTime}–${v.endTime}` : '未填時間';
+    const main = [v.instructor, v.content].filter(Boolean).join('・');
+    sumEl.innerHTML = `<span class="sum-date">${escapeHtml(shortDateLabel(v.date))}</span><span class="sum-time">${escapeHtml(timePart)}</span><span class="sum-main">${escapeHtml(main || '（尚未填寫內容）')}</span>`;
+  }else{
+    sumEl.textContent = wrap.dataset.everLocked==='true' ? '編輯課程場次' : '新增課程場次';
+  }
+  let tag = '';
+  if(wrap.dataset.everLocked==='true'){
+    if(changedFieldLabels(wrap).length) tag = '<span class="sum-tag-pill changed">已修改・未儲存</span>';
+  }else if(!isBlankSession(v)){
+    tag = '<span class="sum-tag-pill new">新增・未儲存</span>';
+  }
+  wrap.querySelector('.sum-tag').innerHTML = tag;
+  wrap.querySelector('.editSessionBtn').style.display = collapsed ? '' : 'none';
+  wrap.querySelector('.doneSessionBtn').style.display = collapsed ? 'none' : '';
+}
+
+function setRowCollapsed(wrap, collapsed){
+  wrap.classList.toggle('collapsed', !!collapsed);
+  refreshSessionSummary(wrap);
+  updateExpandAllLabel();
+}
+// 舊名稱保留：鎖定＝收合成一行
+function setRowLockState(wrap, locked){ setRowCollapsed(wrap, locked); }
+
+function updateExpandAllLabel(){
+  const btn = document.getElementById('unlockAllBtn');
+  if(!btn) return;
+  const anyCollapsed = $$('#sessionList .session-card').some(r=>r.classList.contains('collapsed'));
+  btn.textContent = anyCollapsed ? '📂 全部展開' : '📁 全部收合';
+}
+
+function flashCard(card){
+  card.classList.remove('highlight');
+  void card.offsetWidth;
+  card.classList.add('highlight');
+  setTimeout(()=>card.classList.remove('highlight'), 1300);
+}
+
+// 複製：時間、老師、藝師、年級、地點、內容都一樣，日期先帶入下一週同一天
+function copySessionRow(src){
+  const v = readSessionValues(src);
+  let nd = '';
+  if(v.date){
+    const c = addDaysToKey(v.date, 7);
+    if(c <= PROGRAM_LAST_DAY) nd = c;
+  }
+  const w = addSessionRow({
+    semester: nd ? deriveSemester(nd) : v.semester, date: nd,
+    startTime: v.startTime, endTime: v.endTime,
+    companionTeacher: v.companionTeacher, instructor: v.instructor,
+    studentGrades: v.studentGrades, location: v.location, content: v.content,
+    locked: false
+  });
+  src.after(w);
+  renumberSessions();
+  checkSessionOverlaps();
+  recalcTotals();
+  applySessionMonthFilter();
+  if(w.style.display==='none' && nd){
+    activeMonthFilter = nd.slice(0,7);
+    renderMonthFilterRow();
+    applySessionMonthFilter();
+  }
+  setFormDirty(true);
+  w.scrollIntoView({behavior:'smooth', block:'center'});
+  flashCard(w);
+  showToast(nd ? '已複製一筆，日期先帶入下一週同一天，請確認或修改' : '已複製一筆，請選擇上課日期');
+  return w;
 }
 
 function updateRowHours(wrap){
@@ -1551,10 +1766,10 @@ function renderMonthFilterRow(){
 // row without a day picked yet still counts as "in" the right month.
 function applySessionMonthFilter(){
   $$('#sessionList .session-card').forEach(row=>{
-    const y = row.querySelector('.s-date-y').value;
-    const m = row.querySelector('.s-date-m').value;
-    const monthKey = (y && m) ? `${y}-${String(m).padStart(2,'0')}` : '';
-    const show = activeMonthFilter==='all' || monthKey===activeMonthFilter;
+    const d = getSessionDateValue(row);
+    const monthKey = d ? d.slice(0,7) : (row.dataset.restrictMonth || '');
+    // 還沒選日期、正在編輯中的新場次一律顯示，避免剛新增就被月份頁籤藏起來
+    const show = activeMonthFilter==='all' || monthKey===activeMonthFilter || (!d && !row.classList.contains('collapsed'));
     row.style.display = show ? '' : 'none';
   });
 }
@@ -1943,14 +2158,18 @@ function refreshHoursBar(actual){
 }
 
 $('#addSessionBtn')&&$('#addSessionBtn').addEventListener('click', ()=>{
+  let w;
   if(activeMonthFilter !== 'all'){
     const [y,m] = activeMonthFilter.split('-').map(Number);
     const monthInfo = FORM_MONTHS.find(fm=>fm.y===y && fm.m===m);
     const semester = monthInfo && monthInfo.sem==='下' ? '下學期' : '上學期';
-    addSessionRow({semester}, {restrictToMonth:{y,m}});
+    w = addSessionRow({semester}, {restrictToMonth:{y,m}});
   }else{
-    addSessionRow();
+    w = addSessionRow();
   }
+  setFormDirty(true);
+  w.scrollIntoView({behavior:'smooth', block:'center'});
+  const di = w.querySelector('.s-date'); if(di) di.focus();
 });
 
 function logBasicInfoChange(schoolId, reason, before, after){
@@ -1973,43 +2192,133 @@ function logBasicInfoChange(schoolId, reason, before, after){
   if(DATA.changeLog.length > 200) DATA.changeLog.length = 200;
 }
 
-$('#saveBtn')&&$('#saveBtn').addEventListener('click', ()=>{
-  if(!currentSchoolId){ showToast('請先選擇學校'); return; }
-  const school = DATA.schools.find(s=>s.id===currentSchoolId);
-  if(!school){ showToast('找不到此學校資料，請重新整理頁面後再試'); return; }
-  openConfirmModal(
-    '老師您好！\n我們會鎖定目前填入的內容，\n後續要修改已鎖定內容的話會需要填寫原因。\n如確定安排好課程期程表的話請按「確認」。',
-    ()=>commitSaveSchool(school)
-  );
-});
+$('#saveBtn')&&$('#saveBtn').addEventListener('click', ()=>openSaveReview());
 
-// One reason unlocks everything currently locked (基本資料 + 每一筆已鎖定的場次)
-// instead of clicking "✏️ 修改" and re-typing the same reason on each item.
-// Saving afterwards still diffs each field individually and logs exactly
-// what changed, so the admin-side change log stays just as precise.
-$('#unlockAllBtn')&&$('#unlockAllBtn').addEventListener('click', ()=>{
-  const lockedSessionRows = $$('#sessionList .session-card').filter(r=>r.classList.contains('locked-card'));
-  const basicInfoLocked = !!basicInfoCurrentlyLocked;
-  if(!basicInfoLocked && lockedSessionRows.length===0){
-    showToast('目前沒有已鎖定的內容需要解鎖');
+let basicInfoSnapshot = '';
+function readBasicInfo(){
+  return {
+    collaboratingArtists: getSimpleListValues('artists'),
+    companionTeachers: getSimpleListValues('teachers'),
+    studentGroups: getStudentGroupValues(),
+    contactTeacher: $('#f-teacher').value.trim(),
+    contactPhone: $('#f-phone').value.trim()
+  };
+}
+
+let _reviewState = null;
+function openSaveReview(){
+  if(!currentSchoolRef){ showToast('找不到此學校資料，請重新整理頁面後再試'); return; }
+  const rows = $$('#sessionList .session-card');
+  checkSessionOverlaps();
+
+  // 1) 存檔前自動檢查
+  const issues = [];
+  rows.forEach((r, idx)=>{
+    const v = readSessionValues(r);
+    if(isBlankSession(v)) return;
+    const label = `第 ${idx+1} 筆${v.date ? '（'+shortDateLabel(v.date)+'）' : ''}`;
+    if(!v.date) issues.push({row:r, text:`${label}：還沒選上課日期`});
+    if(!v.startTime || !v.endTime) issues.push({row:r, text:`${label}：還沒填上課時間`});
+    else if(computeHours(v.startTime, v.endTime) <= 0) issues.push({row:r, text:`${label}：結束時間早於開始時間`});
+    const badge = r.querySelector('.conflict-badge');
+    if(badge && badge.classList.contains('show')) issues.push({row:r, text:`${label}：${badge.textContent.replace('■','').trim()}`});
+  });
+
+  // 2) 這次的修改
+  const changed = rows.filter(r=>r.dataset.everLocked==='true')
+    .map(r=>({row:r, fields:changedFieldLabels(r), v:readSessionValues(r)}))
+    .filter(x=>x.fields.length);
+  const newCount = rows.filter(r=>r.dataset.everLocked!=='true' && !isBlankSession(readSessionValues(r))).length;
+  const basicChanged = !!currentSchoolRef.basicInfoLocked && JSON.stringify(readBasicInfo()) !== basicInfoSnapshot;
+  const deletions = pendingDeletions.slice();
+  const needReason = changed.length>0 || deletions.length>0 || basicChanged;
+  _reviewState = {changed, deletions, basicChanged, needReason, issues};
+
+  $('#saveReviewTitle').textContent = needReason ? '確認修改並說明原因' : '確認儲存';
+  $('#saveReviewIssues').innerHTML = issues.length
+    ? `<div class="review-section"><h4>⚠️ 儲存前提醒<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（點一下可以跳到那一筆）</span></h4><ul class="review-list">${issues.map((it,i)=>`<li class="review-issue" data-i="${i}">${escapeHtml(it.text)}</li>`).join('')}</ul></div>`
+    : '';
+  const lines = [];
+  changed.forEach(x=>lines.push(`修改 ${shortDateLabel(x.v.date)}：${x.fields.join('、')}`));
+  deletions.forEach(d=>lines.push(`移除 ${d.label}`));
+  if(basicChanged) lines.push('修改學校基本資料');
+  if(newCount) lines.push(`新增 ${newCount} 筆課程場次`);
+  $('#saveReviewChanges').innerHTML = lines.length
+    ? `<div class="review-section"><h4>這次的修改</h4><ul class="review-list">${lines.map(l=>`<li>${escapeHtml(l)}</li>`).join('')}</ul></div>`
+    : '';
+  $('#saveReviewReasonWrap').style.display = needReason ? '' : 'none';
+  $('#saveReviewReason').value = '';
+  $('#saveReviewReasonErr').textContent = '';
+  let note = '';
+  if(!lines.length) note = '目前沒有修改。按「確認儲存」表示您已確認以上課程期程表內容正確。';
+  else if(!needReason) note = '儲存後，之後如果要修改已儲存的內容，系統會請您簡單說明原因。';
+  $('#saveReviewNote').textContent = note;
+  $('#saveReviewNote').style.display = note ? '' : 'none';
+  $('#saveReviewOkBtn').textContent = issues.length ? '仍要儲存' : '確認儲存';
+  $('#saveReviewModal').style.display = 'flex';
+}
+function closeSaveReview(){ $('#saveReviewModal').style.display = 'none'; }
+
+$('#saveReviewCancelBtn')&&$('#saveReviewCancelBtn').addEventListener('click', closeSaveReview);
+$('#saveReviewModal')&&$('#saveReviewModal').addEventListener('click', (e)=>{
+  if(e.target.id==='saveReviewModal'){ closeSaveReview(); return; }
+  const li = e.target.closest && e.target.closest('.review-issue');
+  if(li && _reviewState){
+    const it = _reviewState.issues[Number(li.dataset.i)];
+    closeSaveReview();
+    if(it) goToSessionRow(it.row);
     return;
   }
-  openEditReasonModal((reason)=>{
-    if(basicInfoLocked){
-      currentBasicInfoEditReason = reason;
-      setBasicInfoLockState(false);
+  const qb = e.target.closest && e.target.closest('.review-quick button');
+  if(qb){
+    const ta = $('#saveReviewReason');
+    const parts = ta.value.split('、').map(x=>x.trim()).filter(Boolean);
+    if(!parts.includes(qb.dataset.r)) parts.push(qb.dataset.r);
+    ta.value = parts.join('、');
+    $('#saveReviewReasonErr').textContent = '';
+  }
+});
+$('#saveReviewReason')&&$('#saveReviewReason').addEventListener('input', ()=>{ $('#saveReviewReasonErr').textContent = ''; });
+$('#saveReviewOkBtn')&&$('#saveReviewOkBtn').addEventListener('click', ()=>{
+  const st = _reviewState;
+  if(!st) return;
+  if(st.needReason){
+    const reason = $('#saveReviewReason').value.trim();
+    if(!reason){
+      $('#saveReviewReasonErr').textContent = '請簡單說明修改原因，例如：學校有活動';
+      $('#saveReviewReason').focus();
+      return;
     }
-    lockedSessionRows.forEach(wrap=>{
-      wrap.dataset.editReason = reason;
-      setRowLockState(wrap, false);
-    });
-    showToast(`已解鎖${basicInfoLocked?'學校基本資料與':''}全部 ${lockedSessionRows.length} 筆已鎖定場次，修改完成後記得按下方「儲存」`);
-  }, {
-    title: '解鎖原因',
-    help: '請說明這次要調整已鎖定內容的原因，這個原因會套用到所有已鎖定的項目，方便主辦方追蹤異動內容。',
-    confirmText: '確認解鎖全部',
-    requireMsg: '請填寫解鎖原因'
-  });
+    st.changed.forEach(x=>{ x.row.dataset.editReason = reason; });
+    pendingDeletions.forEach(pd=>{ if(!pd.reason) pd.reason = reason; });
+    if(st.basicChanged) currentBasicInfoEditReason = reason;
+  }
+  closeSaveReview();
+  commitSaveSchool(currentSchoolRef);
+});
+
+// 從提醒清單跳到那一筆：切回清單、確保月份頁籤看得到、展開並閃一下
+function goToSessionRow(row){
+  if(!row || !row.isConnected) return;
+  if(typeof isCalMode==='function' && isCalMode()) $('#sessionListViewBtn').click();
+  setRowCollapsed(row, false);
+  applySessionMonthFilter();
+  if(row.style.display==='none'){
+    activeMonthFilter = 'all';
+    renderMonthFilterRow();
+    applySessionMonthFilter();
+  }
+  row.scrollIntoView({behavior:'smooth', block:'center'});
+  flashCard(row);
+}
+
+// 全部展開／全部收合（修改原因改到按「儲存」時再一次說明）
+$('#unlockAllBtn')&&$('#unlockAllBtn').addEventListener('click', ()=>{
+  const rows = $$('#sessionList .session-card');
+  const anyCollapsed = rows.some(r=>r.classList.contains('collapsed'));
+  rows.forEach(r=>{ r.classList.toggle('collapsed', !anyCollapsed); refreshSessionSummary(r); });
+  applySessionMonthFilter();
+  updateExpandAllLabel();
 });
 
 let _savingSchool = false;
@@ -2102,7 +2411,7 @@ async function _commitSaveSchoolInner(school){
 
   // Rows removed during this editing session (after going through the
   // unlock/reason flow) — log their deletion now, at save time.
-  pendingDeletions.forEach(pd=>logSessionChange(school.id, pd.sessionId, pd.reason, true, null));
+  pendingDeletions.forEach(pd=>logSessionChange(school.id, pd.sessionId, pd.reason || '（未提供原因）', true, null));
   pendingDeletions = [];
 
   // Keep the on-screen session cards (and the saved order) in chronological order.
@@ -3451,6 +3760,12 @@ async function init(){
         const nums = document.querySelectorAll('#formArea .card-title .num');
         if(nums[0]) nums[0].textContent = '1';
         if(nums[1]) nums[1].textContent = '2';
+        // 使用說明：按「我知道了」後收起（記在這台電腦），可從右上角「使用說明」再打開
+        const hc=$('#fillHelpCard'), hClose=$('#fillHelpCloseBtn'), hOpen=$('#fillHelpOpenBtn');
+        let helpHidden=false; try{ helpHidden = localStorage.getItem('artplan-fill-help-hidden')==='1'; }catch(e){}
+        if(hc && helpHidden) hc.style.display='none';
+        if(hClose) hClose.addEventListener('click', ()=>{ hc.style.display='none'; try{ localStorage.setItem('artplan-fill-help-hidden','1'); }catch(e){} });
+        if(hOpen) hOpen.addEventListener('click', ()=>{ hc.style.display=''; try{ localStorage.removeItem('artplan-fill-help-hidden'); }catch(e){} hc.scrollIntoView({behavior:'smooth', block:'center'}); });
         const bn=$('#bannerName'), bc=$('#bannerCategory');
         if(bn) bn.textContent = school.name;
         if(bc){
