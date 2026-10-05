@@ -205,7 +205,9 @@
   .visit-filter-btn{font-size:12.5px; padding:5px 12px; border-radius:99px; border:1.5px solid var(--vf-color, var(--ink)); background:#fff; color:var(--vf-color, var(--ink)); cursor:pointer; font-family:inherit; font-weight:600;}
   .visit-filter-btn.active{background:var(--vf-color, var(--ink)); color:#fff;}
   .visit-filter-btn .vf-count{font-weight:400; opacity:.85; margin-left:3px;}
-  .committee-name-input{width:96px; font-size:12px; padding:3px 6px; border:1px solid var(--border); border-radius:6px; font-family:inherit;}
+  input.committee-name-input{width:100px; height:auto; display:inline-block; font-size:12px; padding:3px 6px; margin:0; border:1px solid var(--border); border-radius:6px; font-family:inherit; vertical-align:middle;}
+  .school-link{text-decoration:none; cursor:pointer;}
+  .school-link:hover{filter:brightness(1.15); text-decoration:underline;}
   .content-cell{display:inline; line-height:1.5;}
   .content-cell.truncated{cursor:pointer;}
   .content-cell.truncated:hover{color:var(--accent-dark);}
@@ -2734,7 +2736,7 @@ function renderListView(){
     tr.innerHTML = `
       <td data-label="日期">${fmtDateDisplay(ev.date)}</td>
       <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
-      <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}<span class="badge" style="background:${catColor};color:#fff;">${escapeHtml(ev.schoolName)}</span></td>
+      <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${catColor};color:#fff;" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)} ↗</a></td>
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
       <td data-label="隨課老師">${escapeHtml(ev.companionTeacher||'（未填）')}</td>
       <td data-label="授課藝師">${escapeHtml(ev.instructor||'')}</td>
