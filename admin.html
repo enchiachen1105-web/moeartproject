@@ -728,6 +728,22 @@ $('#confirmModal')&&$('#confirmModal').addEventListener('click', (e)=>{
   if(e.target.id === 'confirmModal') closeConfirmModal();
 });
 
+function sessionCountedHours(sess){
+  const c = sess ? sess.countedHours : null;
+  if(c !== null && c !== undefined && c !== '' && !isNaN(Number(c))) return Number(c);
+  return computeHours(sess && sess.startTime, sess && sess.endTime);
+}
+function rowCountedValue(wrap){
+  const el = wrap.querySelector('.s-counted');
+  const v = el ? el.value.trim() : '';
+  return (v === '' || isNaN(Number(v))) ? null : Number(v);
+}
+function rowHours(wrap){
+  const c = rowCountedValue(wrap);
+  if(c !== null) return c;
+  return computeHours(wrap.querySelector('.s-start').value, wrap.querySelector('.s-end').value);
+}
+
 function computeHours(start, end){
   if(!start || !end) return 0;
   const [sh,sm] = start.split(':').map(Number);
@@ -1416,7 +1432,7 @@ function addSessionRow(data, opts){
       </span>
     </div>
     <div class="session-editor">
-      <div class="grid-row grid-3">
+      <div class="grid-row grid-4">
         <div>
           <label>上課日期</label>
           <input type="date" class="s-date" min="${PROGRAM_FIRST_DAY}" max="${PROGRAM_LAST_DAY}">
@@ -1430,6 +1446,11 @@ function addSessionRow(data, opts){
         <div>
           <label>結束時間</label>
           <input type="time" class="s-end" step="60">
+        </div>
+        <div>
+          <label>計入時數<span style="font-weight:400;color:var(--ink-faint);font-size:12px;">（選填）</span></label>
+          <input type="number" class="s-counted" min="0" step="0.5" placeholder="依時間自動計算">
+          <div class="auto-hint" style="color:var(--ink-faint);">學校以「節」計算時數時才需要填</div>
         </div>
       </div>
       <div class="grid-row grid-2">
@@ -1472,6 +1493,8 @@ function addSessionRow(data, opts){
   updateSessionWeekday(wrap);
   wrap.querySelector('.s-start').value = data.startTime || '';
   wrap.querySelector('.s-end').value = data.endTime || '';
+  wrap.querySelector('.s-counted').value = (data.countedHours!==null && data.countedHours!==undefined && data.countedHours!=='') ? String(Number(data.countedHours)) : '';
+  wrap.querySelector('.s-counted').addEventListener('input', ()=>updateRowHours(wrap));
   const companionRowsEl = wrap.querySelector('.companion-rows');
   const existingCompanions = (data.companionTeacher||'').split(/[、,，]/).map(s=>s.trim()).filter(Boolean);
   if(existingCompanions.length===0){
@@ -1568,7 +1591,8 @@ function readSessionValues(r){
     instructor: getSessionInstructorValues(r).join('、'),
     studentGrades: getSessionGradeValues(r),
     location: r.querySelector('.s-location').value.trim(),
-    content: r.querySelector('.s-content').value.trim()
+    content: r.querySelector('.s-content').value.trim(),
+    countedHours: rowCountedValue(r)
   };
 }
 
@@ -1652,6 +1676,7 @@ function copySessionRow(src){
     startTime: v.startTime, endTime: v.endTime,
     companionTeacher: v.companionTeacher, instructor: v.instructor,
     studentGrades: v.studentGrades, location: v.location, content: v.content,
+    countedHours: v.countedHours,
     locked: false
   });
   src.after(w);
@@ -1685,8 +1710,12 @@ function updateRowHours(wrap){
       return;
     }
   }
-  const h = computeHours(start, end);
-  hoursEl.textContent = h ? `${h} 小時` : '';
+  const clock = computeHours(start, end);
+  const countedEl = wrap.querySelector('.s-counted');
+  if(countedEl) countedEl.placeholder = clock ? `依時間 ${clock}` : '依時間自動計算';
+  const counted = rowCountedValue(wrap);
+  const h = counted !== null ? counted : clock;
+  hoursEl.textContent = h ? `${h} 小時${counted !== null ? '（以節計）' : ''}` : '';
   recalcTotals();
 }
 
@@ -2133,7 +2162,7 @@ function recalcTotals(){
   const rows = $$('#sessionList .session-card');
   let total = 0;
   rows.forEach(r=>{
-    total += computeHours(r.querySelector('.s-start').value, r.querySelector('.s-end').value);
+    total += rowHours(r);
   });
   $('#totalHoursLabel').textContent = fmtHoursTotal(total);
   $('#totalCountLabel').textContent = rows.length;
@@ -2151,7 +2180,7 @@ function refreshHoursBar(actual){
   bar.style.display = 'flex';
   $('#hoursTarget').textContent = target;
   const actualVal = actual !== undefined ? actual :
-    $$('#sessionList .session-card').reduce((s,r)=>s+computeHours(r.querySelector('.s-start').value, r.querySelector('.s-end').value),0);
+    $$('#sessionList .session-card').reduce((s,r)=>s+rowHours(r),0);
   $('#hoursActual').textContent = fmtHoursTotal(actualVal);
   $('#hoursActual').style.color = actualVal >= target ? '#1E7D3A' : '#C0392B';
 }
@@ -2374,7 +2403,8 @@ async function _commitSaveSchoolInner(school){
       instructor: getSessionInstructorValues(r).join('、'),
       studentGrades: getSessionGradeValues(r),
       location: r.querySelector('.s-location').value.trim(),
-      content: r.querySelector('.s-content').value.trim()
+      content: r.querySelector('.s-content').value.trim(),
+      countedHours: rowCountedValue(r)
     };
     // This row was a previously-locked session that got unlocked via the
     // "✏️ 修改" + reason flow this session — log it if anything actually changed.
@@ -2455,7 +2485,8 @@ function getAllEvents(){
         instructor: sess.instructor,
         location: sess.location,
         content: sess.content,
-        hours: computeHours(sess.startTime, sess.endTime),
+        hours: sessionCountedHours(sess),
+        countedHours: sess.countedHours,
         visitPlanned: !!sess.visitPlanned,
         visitConfirmed: !!sess.visitConfirmed,
         visitSuyu: !!sess.visitSuyu,
@@ -2602,7 +2633,8 @@ function migrateToList(listVal, oldStringVal){
 
 const SESSION_FIELD_LABELS = {
   semester: '學期', date: '日期', startTime: '開始時間', endTime: '結束時間',
-  companionTeacher: '隨課老師', instructor: '授課藝師', studentGrades: '學生年級', location: '上課地點', content: '上課內容'
+  companionTeacher: '隨課老師', instructor: '授課藝師', studentGrades: '學生年級', location: '上課地點', content: '上課內容',
+  countedHours: '計入時數'
 };
 
 // Records a change to a previously-locked (already-saved) session — either an
@@ -2809,6 +2841,7 @@ function renderChangeLogEntry(entry){
     diffHtml = [
       fmtChangeField('日期', b.date?fmtDateDisplay(b.date):'', a.date?fmtDateDisplay(a.date):''),
       fmtChangeField('時間', b.startTime?`${b.startTime}~${b.endTime}`:'', a.startTime?`${a.startTime}~${a.endTime}`:''),
+      fmtChangeField('計入時數', (b.countedHours!=null&&b.countedHours!=='')?`${b.countedHours} 小時`:'', (a.countedHours!=null&&a.countedHours!=='')?`${a.countedHours} 小時`:''),
       fmtChangeField('學期', b.semester, a.semester),
       fmtChangeField('隨課老師', b.companionTeacher, a.companionTeacher),
       fmtChangeField('授課藝師', b.instructor, a.instructor),
@@ -2967,7 +3000,7 @@ function buildSchoolOptionsWithHoursHTML(category){
       const school = DATA.schools.find(sc=>sc.name===s.name);
       const canonical = CANONICAL_SCHOOLS.find(c=>c.name===s.name);
       const target = (school && Number(school.targetHours)) || (canonical ? canonical.targetHours : null);
-      const filled = school ? (school.sessions||[]).reduce((sum,sess)=>sum+computeHours(sess.startTime,sess.endTime),0) : 0;
+      const filled = school ? (school.sessions||[]).reduce((sum,sess)=>sum+sessionCountedHours(sess),0) : 0;
       const hoursLabel = target ? `（${fmtHoursTotal(filled)}/${target}h）` : '';
       html += `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}${hoursLabel}</option>`;
     });
@@ -3546,7 +3579,7 @@ $('#exportAllCsvBtn')&&$('#exportAllCsvBtn').addEventListener('click', ()=>{
   // is currently applied on screen — this is the "give me everything" button.
   const events = getAllEvents();
   if(events.length===0){ showToast('目前沒有任何已填寫的課程場次可匯出'); return; }
-  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容','訪視標記'];
+  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','時數','隨課老師','授課藝師','上課地點','上課內容','訪視標記'];
   const csvEscape = (v)=>{
     v = (v==null?'':String(v));
     if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
@@ -3555,7 +3588,7 @@ $('#exportAllCsvBtn')&&$('#exportAllCsvBtn').addEventListener('click', ()=>{
   const rows = events
     .sort((a,b)=> (a.schoolName||'').localeCompare(b.schoolName||'','zh-Hant') || (a.date||'').localeCompare(b.date||''))
     .map(ev=>[
-      ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.companionTeacher, ev.instructor, ev.location, ev.content, visitMarksText(ev)
+      ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.hours, ev.companionTeacher, ev.instructor, ev.location, ev.content, visitMarksText(ev)
     ].map(csvEscape).join(','));
   const csv = '\uFEFF' + header.join(',') + '\r\n' + rows.join('\r\n');
   downloadFile('全部學校課程期程表.csv', csv, 'text/csv;charset=utf-8');
@@ -3573,14 +3606,14 @@ $('#exportIcsBtn')&&$('#exportIcsBtn').addEventListener('click', ()=>{
 $('#exportCsvBtn')&&$('#exportCsvBtn').addEventListener('click', ()=>{
   const events = getFilteredEventsFixed();
   if(events.length===0){ showToast('目前篩選條件下沒有可匯出的場次'); return; }
-  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','隨課老師','授課藝師','上課地點','上課內容','訪視標記'];
+  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','時數','隨課老師','授課藝師','上課地點','上課內容','訪視標記'];
   const csvEscape = (v)=>{
     v = (v==null?'':String(v));
     if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
     return v;
   };
   const rows = events.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(ev=>[
-    ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.companionTeacher, ev.instructor, ev.location, ev.content, visitMarksText(ev)
+    ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.hours, ev.companionTeacher, ev.instructor, ev.location, ev.content, visitMarksText(ev)
   ].map(csvEscape).join(','));
   const csv = '\uFEFF' + header.join(',') + '\r\n' + rows.join('\r\n');
   downloadFile('課程期程表彙整.csv', csv, 'text/csv;charset=utf-8');
@@ -3601,7 +3634,8 @@ function dbRowToSession(r){
     studentGrades: r.student_grades||[], location: r.location||'', content: r.content||'',
     visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
     visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
-    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', locked: r.locked||false
+    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', locked: r.locked||false,
+    countedHours: (r.counted_hours===null || r.counted_hours===undefined) ? null : Number(r.counted_hours)
   };
 }
 
@@ -3668,6 +3702,7 @@ async function saveData(){
         date:s.date||null, start_time:s.startTime||null, end_time:s.endTime||null,
         companion_teacher:s.companionTeacher||'', instructor:s.instructor||'',
         student_grades:s.studentGrades||[], location:s.location||'', content:s.content||'',
+        counted_hours:(s.countedHours===null || s.countedHours===undefined || s.countedHours==='') ? null : Number(s.countedHours),
         locked:!!s.locked, sort_order:i
       }));
       await upsertSessions(rows);
