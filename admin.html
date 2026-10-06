@@ -222,7 +222,12 @@
   }
   .day-chip-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0;}
   .chip-dia{display:inline-block; background:#fff; border-radius:3px; font-size:10px; line-height:1; padding:1px 2px; margin-right:4px; vertical-align:1px;}
-  .chip-dia.planned{background:none; color:#fff; padding:1px 0;}
+  .chip-dia.planned{background:none; color:inherit; padding:1px 0; font-size:11px;}
+  .cat-tag{display:inline-block; font-size:11px; font-weight:700; border-radius:4px; padding:1px 6px; margin-right:5px; white-space:nowrap; vertical-align:middle;}
+  .cat-filter-btn{font-size:12.5px; padding:5px 12px; border-radius:99px; border:1.5px solid var(--cf-fg, var(--ink)); background:#fff; color:var(--cf-fg, var(--ink)); cursor:pointer; font-family:inherit; font-weight:600;}
+  .cat-filter-btn.active{background:var(--cf-bg, var(--ink)); color:var(--cf-fg, #fff); border-color:var(--cf-fg, var(--ink));}
+  .cat-filter-btn[data-cat=""].active{background:var(--ink); color:#fff;}
+  .cat-filter-btn .vf-count{font-weight:400; opacity:.8; margin-left:3px;}
   .chip-people{font-size:11px; color:var(--ink-soft); line-height:1.35; margin:1px 2px 3px; white-space:normal;}
   .day-chip-flagbar{display:flex; height:7px;}
   .day-chip-flagbar > span{flex:1;}
@@ -380,6 +385,7 @@
           <button type="button" class="btn btn-ghost btn-sm" id="refreshDataBtn" title="其他電腦或同事剛打的勾，按這裡馬上看到最新狀態">🔄 重新載入最新資料</button>
         </div>
         <div class="legend" id="colorLegend"></div>
+        <div class="visit-filter-row" id="categoryFilterRow"></div>
         <div class="visit-filter-row" id="visitFilterRow"></div>
 
         <div class="month-filter-row" id="adminMonthFilterRow"></div>
@@ -2698,12 +2704,61 @@ function logSessionChange(schoolId, sessionId, reason, isDeleted, afterValues){
 
 /* ---------------- visit flags (per-session checkboxes) ---------------- */
 
+// 類別配色（馬卡龍・清透水彩；普通班用燕麥灰）：底色＝淺色，文字＝同色系深色
 const CATEGORY_COLORS = {
-  '音樂班': '#B33A3A',
-  '舞蹈班': '#D1722F',
-  '美術班': '#C9A227',
-  '普通班': '#8C5A3C'
+  '音樂班': '#F3A3BC',
+  '舞蹈班': '#9DD8C8',
+  '美術班': '#9CCBF2',
+  '普通班': '#D9D1C6'
 };
+const CATEGORY_TEXT = {
+  '音樂班': '#62182F',
+  '舞蹈班': '#1D5E4C',
+  '美術班': '#184162',
+  '普通班': '#50402B'
+};
+// 每所學校：同類別同色系、深淺略有不同
+const SCHOOL_COLORS = {
+  "嘉義縣南新國小": {bg:"#EF83B7", fg:"#62182F"},
+  "臺南市新民國小": {bg:"#F2B8CF", fg:"#62182F"},
+  "臺南市崇明國中": {bg:"#F597B4", fg:"#62182F"},
+  "屏東縣立仁愛國小": {bg:"#F6C4CF", fg:"#62182F"},
+  "國立羅東高級中學": {bg:"#EF8393", fg:"#62182F"},
+  "臺南市立中山國民中學": {bg:"#8ED2B5", fg:"#1D5E4C"},
+  "臺南市永康區復興國民小學": {bg:"#B4DBD0", fg:"#1D5E4C"},
+  "高雄市鳳山區五福國民小學": {bg:"#99DCD5", fg:"#1D5E4C"},
+  "新北市大觀國民小學": {bg:"#7CD5EE", fg:"#184162"},
+  "新北市立大觀國民中學-方案二": {bg:"#B2E1F1", fg:"#184162"},
+  "桃園市中壢國民小學": {bg:"#8FD8F4", fg:"#184162"},
+  "桃園市八德區瑞豐國民小學": {bg:"#BDE3F5", fg:"#184162"},
+  "新竹縣立竹東國民中學": {bg:"#7CC7EE", fg:"#184162"},
+  "雲林縣元長鄉元長國民小學": {bg:"#B2D9F1", fg:"#184162"},
+  "雲林縣立元長國民中學-方案二": {bg:"#8FCBF4", fg:"#184162"},
+  "嘉義市大同國民小學": {bg:"#BDDCF5", fg:"#184162"},
+  "嘉義縣竹崎國民小學": {bg:"#7CB9EE", fg:"#184162"},
+  "嘉義縣立大吉國民中學": {bg:"#B2D1F1", fg:"#184162"},
+  "高雄市林園區林園國民小學-方案二": {bg:"#8FBFF4", fg:"#184162"},
+  "宜蘭縣宜蘭市中山國民小學-方案二": {bg:"#BDD5F5", fg:"#184162"},
+  "花蓮縣立國風國民中學": {bg:"#7CABEE", fg:"#184162"},
+  "臺東縣臺東市新生國民小學": {bg:"#B2C9F1", fg:"#184162"},
+  "澎湖縣立馬公國民中學-方案二": {bg:"#8FB2F4", fg:"#184162"},
+  "國立清華大學附設實驗國民小學": {bg:"#BDCEF5", fg:"#184162"},
+  "臺北市中正區忠孝國民小學": {bg:"#C7AFA5", fg:"#50402B"},
+  "新北市中和區景新國民小學": {bg:"#DFDCC8", fg:"#50402B"},
+  "苗栗縣立泰安國民中小學（國小部）": {bg:"#CCB7AE", fg:"#50402B"},
+  "臺中市梧棲區大德國民小學": {bg:"#E4E2D1", fg:"#50402B"},
+  "彰化縣縣立鹿江國際中小學": {bg:"#D2BFB7", fg:"#50402B"},
+  "宜蘭縣宜蘭市力行國民小學": {bg:"#E9E7DA", fg:"#50402B"},
+  "宜蘭縣羅東鎮羅東國民小學": {bg:"#D8C7C0", fg:"#50402B"},
+  "國立臺中教育大學附設實驗國民小學": {bg:"#EFEDE3", fg:"#50402B"}
+};
+function schoolColor(name, category){
+  return SCHOOL_COLORS[name] || {bg: CATEGORY_COLORS[category] || '#E6E2DC', fg: CATEGORY_TEXT[category] || '#2A2622'};
+}
+function categoryTagHTML(category){
+  if(!category) return '';
+  return `<span class="cat-tag" style="background:${CATEGORY_COLORS[category]||'#E6E2DC'};color:${CATEGORY_TEXT[category]||'#2A2622'};">${escapeHtml(category)}</span>`;
+}
 
 const VISIT_FLAGS = [
   {field:'visitPlanned',   label:'訪視預計', color:'#4A7A9E'},
@@ -2777,7 +2832,7 @@ function chipDiamondHTML(ev, visitNums){
     const color = n>=3 ? '#D6332A' : (n===2 ? '#F08A24' : '#F29CB9');
     return `<span class="chip-dia" style="color:${color};">◆</span>`;
   }
-  if(ev.visitPlanned) return `<span class="chip-dia planned">◆</span>`;
+  if(ev.visitPlanned) return `<span class="chip-dia planned">◇</span>`;
   return '';
 }
 // 色塊下方淺色字：誰會去（素瑜・恩嘉・委員＋姓名），都沒有就不顯示
@@ -2804,9 +2859,7 @@ function flagBarHTML(ev){
 function renderLegend(){
   const el = $('#colorLegend');
   if(!el) return;
-  const categoryPart = Object.keys(CATEGORY_COLORS).map(cat=>
-    `<span class="legend-item"><span class="legend-swatch" style="background:${CATEGORY_COLORS[cat]};"></span>${escapeHtml(cat)}</span>`
-  ).join('');
+  const categoryPart = Object.keys(CATEGORY_COLORS).map(cat=>categoryTagHTML(cat)).join('');
   const flagPart = VISIT_FLAGS.map(f=>
     `<span class="legend-item"><span class="legend-dot" style="background:${f.color};"></span>${escapeHtml(f.label)}</span>`
   ).join('');
@@ -2815,7 +2868,7 @@ function renderLegend(){
     `<strong style="font-weight:700;">訪視標記：</strong>${flagPart}` +
     `<span style="width:1px;height:14px;background:var(--border);display:inline-block;"></span>` +
     `<strong style="font-weight:700;">月曆菱形：</strong>` +
-    `<span class="legend-item"><span style="background:#8C5A3C;color:#fff;border-radius:3px;padding:0 3px;font-size:10px;">◆</span>訪視預計</span>` +
+    `<span class="legend-item"><span style="background:${CATEGORY_COLORS['美術班']};color:${CATEGORY_TEXT['美術班']};border-radius:3px;padding:0 4px;font-size:10px;">◇</span>訪視預計</span>` +
     `<span class="legend-item" style="color:var(--ink-faint);">訪視確定：</span>` +
     `<span class="legend-item"><span style="color:#F29CB9;">◆</span>第1次</span>` +
     `<span class="legend-item"><span style="color:#F08A24;">◆</span>第2次</span>` +
@@ -2972,9 +3025,40 @@ function renderVisitFilterRow(){
   });
 }
 
+// 類別篩選按鈕：跟上方「篩選條件」的類別下拉選單是同一個篩選，按鈕上的數字＝其他篩選條件下各類別的場次數
+function renderCategoryFilterRow(){
+  const el = $('#categoryFilterRow');
+  if(!el) return;
+  const cur = $('#categoryFilter') ? $('#categoryFilter').value : '';
+  const schoolName = $('#schoolNameFilter') ? $('#schoolNameFilter').value : '';
+  const semester = $('#semesterFilter') ? $('#semesterFilter').value : '';
+  const base = getAllEvents().filter(ev=>{
+    if(schoolName && ev.schoolName !== schoolName) return false;
+    if(semester && normalizeSemester(ev.semester) !== semester) return false;
+    if(activeVisitFilter && !ev[activeVisitFilter]) return false;
+    return true;
+  });
+  let html = `<span class="vf-label">類別篩選：</span>` +
+    `<button type="button" class="cat-filter-btn${cur===''?' active':''}" data-cat="">全部<span class="vf-count">${base.length}</span></button>`;
+  Object.keys(CATEGORY_COLORS).forEach(cat=>{
+    const n = base.filter(ev=>ev.category===cat).length;
+    html += `<button type="button" class="cat-filter-btn${cur===cat?' active':''}" data-cat="${escapeHtml(cat)}" style="--cf-bg:${CATEGORY_COLORS[cat]};--cf-fg:${CATEGORY_TEXT[cat]};">${escapeHtml(cat)}<span class="vf-count">${n}</span></button>`;
+  });
+  el.innerHTML = html;
+  el.querySelectorAll('.cat-filter-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const sel = $('#categoryFilter');
+      if(sel) sel.value = btn.dataset.cat;
+      if(typeof refreshAdminSchoolNameOptions==='function') refreshAdminSchoolNameOptions();
+      renderAdmin();
+    });
+  });
+}
+
 function renderAdmin(){
   renderStats();
   renderLegend();
+  renderCategoryFilterRow();
   renderVisitFilterRow();
   renderChangeLog();
   renderAdminMonthFilterRow();
@@ -3091,7 +3175,7 @@ function renderListView(){
     tr.innerHTML = `
       <td data-label="日期">${fmtDateDisplay(ev.date)}${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
       <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
-      <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${catColor};color:#fff;" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)} ↗</a></td>
+      <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${schoolColor(ev.schoolName, ev.category).bg};color:${schoolColor(ev.schoolName, ev.category).fg};" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)} ↗</a></td>
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
       <td data-label="隨課老師">${escapeHtml(ev.companionTeacher||'（未填）')}</td>
       <td data-label="授課藝師">${escapeHtml(ev.instructor||'')}</td>
@@ -3398,8 +3482,8 @@ function renderAdminYearView(){
       let dotsHtml = '';
       if(dayEvs.length){
         dotsHtml = `<div class="dot-row">${dayEvs.map(ev=>{
-          const c = CATEGORY_COLORS[ev.category]||'var(--ink-faint)';
-          return `<span class="micro-dot" style="background:${c};"></span>`;
+          const c = schoolColor(ev.schoolName, ev.category).bg;
+          return `<span class="micro-dot" style="background:${c}; box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);"></span>`;
         }).join('')}</div>`;
       }
       cell.innerHTML = inMonth ? `${dayNum}${dotsHtml}` : '';
@@ -3465,9 +3549,9 @@ function renderCalendar(){
     const dayEvents = (byDate[dateKey]||[]).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
     let chipsHtml = '';
     dayEvents.forEach(ev=>{
-      const catColor = CATEGORY_COLORS[ev.category] || 'var(--ink-faint)';
+      const sc = schoolColor(ev.schoolName, ev.category);
       chipsHtml += `<div class="day-chip-wrap">`+
-        `<div class="day-chip" style="background:${catColor};" title="${escapeHtml(chipTooltip(ev, visitNums))}">`+
+        `<div class="day-chip" style="background:${sc.bg};color:${sc.fg};" title="${escapeHtml(chipTooltip(ev, visitNums))}">`+
         `<span class="day-chip-name">${chipDiamondHTML(ev, visitNums)}${escapeHtml(ev.schoolName)}</span>`+
         `</div>`+
         chipPeopleHTML(ev)+
@@ -3518,7 +3602,7 @@ function renderMonthList(){
 
   const visitNums = getVisitNumbers();
   bodyEl.innerHTML = events.map(ev=>{
-    const catColor = CATEGORY_COLORS[ev.category] || 'var(--ink-soft)';
+    const catColor = schoolColor(ev.schoolName, ev.category).fg;
     const flags = VISIT_FLAGS.filter(f=>ev[f.field]);
     const order = getVisitOrderInfo(ev);
     const visitNumTag = order ? `<span class="repeat-tag">第${order.visitNumber}次訪視</span>` : '';
@@ -3528,7 +3612,7 @@ function renderMonthList(){
     return `<div class="ev-item">
       <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
       <div class="ev-main">
-        ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
+        ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
         <div class="meta" style="margin-top:2px;">
           <span style="color:var(--ink-soft);">隨課老師：</span>${escapeHtml(ev.companionTeacher||'（未填）')}
           <span style="margin:0 4px;color:var(--ink-faint);">｜</span>
@@ -3841,8 +3925,7 @@ async function init(){
         if(bn) bn.textContent = school.name;
         if(bc){
           bc.textContent = school.category;
-          const cc={'音樂班':'#B33A3A','舞蹈班':'#D1722F','美術班':'#C9A227','普通班':'#8C5A3C'};
-          bc.style.background = cc[school.category]||'#888'; bc.style.color='#fff';
+          bc.style.background = CATEGORY_COLORS[school.category]||'#E6E2DC'; bc.style.color = CATEGORY_TEXT[school.category]||'#2A2622';
         }
       }else{
         showToast('找不到此學校，請確認連結是否正確');
