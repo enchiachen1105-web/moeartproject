@@ -117,6 +117,12 @@
   .sum-tag-pill{font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; white-space:nowrap;}
   .sum-tag-pill.changed{background:#FDEBD8; color:#A3501C;}
   .sum-tag-pill.new{background:#E3F2EF; color:#1F6F66;}
+  .sum-tag-pill.warn{background:#FDE2E0; color:#C0392B;}
+  .check-note{color:#C0392B; font-size:12px; font-weight:700; margin-top:4px; line-height:1.45;}
+  .check-note-clear{margin-left:6px; font-size:11px; font-weight:700; padding:1px 8px; border:1px solid #F1B0A8; border-radius:99px; background:#fff; color:#C0392B; cursor:pointer; font-family:inherit;}
+  .check-note-clear:hover{background:#FDECEA;}
+  .s-check-note{background:#FDECEA; border:1px solid #F5B7B1; color:#C0392B; border-radius:6px; padding:8px 12px; margin-bottom:12px; font-size:13px; font-weight:700; line-height:1.5;}
+  .chip-note{font-size:11px; color:#C0392B; font-weight:700; margin:1px 2px 3px;}
   .auto-hint{font-size:12px; color:var(--teal); margin-top:4px; min-height:16px;}
   .save-bar{position:sticky; bottom:0; z-index:20; background:var(--surface); border-top:1px solid var(--border); padding:12px 0 2px; margin-top:12px;}
   .save-status{margin-right:auto; font-size:13px; color:var(--ink-faint);}
@@ -1480,6 +1486,7 @@ function addSessionRow(data, opts){
       </span>
     </div>
     <div class="session-editor">
+      <div class="s-check-note" style="display:none;"></div>
       <div class="grid-row grid-4">
         <div>
           <label>上課日期</label>
@@ -1615,6 +1622,12 @@ function addSessionRow(data, opts){
   wrap.addEventListener('change', ()=>refreshSessionSummary(wrap));
 
   wrap.dataset.everLocked = data.locked ? 'true' : 'false';
+  wrap.dataset.checkNote = data.checkNote || '';
+  if(wrap.dataset.checkNote){
+    const nb = wrap.querySelector('.s-check-note');
+    nb.textContent = '⚠️ 計畫辦公室提醒：' + wrap.dataset.checkNote;
+    nb.style.display = '';
+  }
 
   $('#sessionList').appendChild(wrap);
   updateRowHours(wrap);
@@ -1678,11 +1691,11 @@ function refreshSessionSummary(wrap){
   }else{
     sumEl.textContent = wrap.dataset.everLocked==='true' ? '編輯課程場次' : '新增課程場次';
   }
-  let tag = '';
+  let tag = wrap.dataset.checkNote ? '<span class="sum-tag-pill warn" title="'+escapeHtml(wrap.dataset.checkNote)+'">⚠ 待確認</span> ' : '';
   if(wrap.dataset.everLocked==='true'){
-    if(changedFieldLabels(wrap).length) tag = '<span class="sum-tag-pill changed">已修改・未儲存</span>';
+    if(changedFieldLabels(wrap).length) tag += '<span class="sum-tag-pill changed">已修改・未儲存</span>';
   }else if(!isBlankSession(v)){
-    tag = '<span class="sum-tag-pill new">新增・未儲存</span>';
+    tag += '<span class="sum-tag-pill new">新增・未儲存</span>';
   }
   wrap.querySelector('.sum-tag').innerHTML = tag;
   wrap.querySelector('.editSessionBtn').style.display = collapsed ? '' : 'none';
@@ -2535,6 +2548,7 @@ function getAllEvents(){
         content: sess.content,
         hours: sessionCountedHours(sess),
         countedHours: sess.countedHours,
+        checkNote: sess.checkNote || '',
         visitPlanned: !!sess.visitPlanned,
         visitConfirmed: !!sess.visitConfirmed,
         visitSuyu: !!sess.visitSuyu,
@@ -2587,7 +2601,7 @@ const CANONICAL_SCHOOLS = [
   {name:"新北市中和區景新國民小學", category:"普通班", region:"北部", county:"新北市", targetHours:22},
   {name:"苗栗縣立泰安國民中小學（國小部）", category:"普通班", region:"中部", county:"苗栗縣", targetHours:40},
   {name:"臺中市梧棲區大德國民小學", category:"普通班", region:"中部", county:"臺中市", targetHours:31},
-  {name:"彰化縣縣立鹿江國際中小學", category:"普通班", region:"中部", county:"彰化縣", targetHours:13},
+  {name:"彰化縣縣立鹿江國際中小學", category:"普通班", region:"中部", county:"彰化縣", targetHours:32},
   {name:"宜蘭縣宜蘭市力行國民小學", category:"普通班", region:"東部、離島", county:"宜蘭縣", targetHours:16},
   {name:"宜蘭縣羅東鎮羅東國民小學", category:"普通班", region:"東部、離島", county:"宜蘭縣", targetHours:26},
   {name:"國立臺中教育大學附設實驗國民小學", category:"普通班", region:"中部", county:"臺中市", targetHours:24}
@@ -3123,7 +3137,7 @@ function renderListView(){
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td data-label="日期">${fmtDateDisplay(ev.date)}</td>
+      <td data-label="日期">${fmtDateDisplay(ev.date)}${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
       <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
       <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${catColor};color:#fff;" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)} ↗</a></td>
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
@@ -3263,6 +3277,26 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
     showToast('⚠️ 儲存失敗，已還原：'+err.message);
     renderAdmin();
   }
+});
+
+// 待確認提醒：按「✕ 已確認」移除（直接寫回資料庫）
+$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+  const btn = e.target.closest && e.target.closest('.check-note-clear');
+  if(!btn) return;
+  const session = findSessionByDataset(btn);
+  if(!session) return;
+  openConfirmModal(`確定已經確認好，要移除這個提醒嗎？\n「${session.checkNote||''}」`, async ()=>{
+    const prev = session.checkNote;
+    session.checkNote = '';
+    try{
+      await updateSession(session.id, {check_note: ''});
+      showToast('✓ 已移除待確認提醒');
+    }catch(err){
+      session.checkNote = prev;
+      showToast('⚠️ 移除失敗（請確認已執行新增欄位的 SQL）：'+err.message);
+    }
+    renderAdmin();
+  });
 });
 
 // Click-to-expand for truncated 授課內容 cells in the list view.
@@ -3485,6 +3519,7 @@ function renderCalendar(){
         `<span class="day-chip-name">${chipDiamondHTML(ev, visitNums)}${escapeHtml(ev.schoolName)}</span>`+
         `</div>`+
         chipPeopleHTML(ev)+
+        (ev.checkNote ? '<div class="chip-note">⚠ 待確認</div>' : '')+
         `</div>`;
     });
     cell.innerHTML = `<div class="d">${inMonth?dayNum:''}</div>${chipsHtml}`;
@@ -3549,6 +3584,7 @@ function renderMonthList(){
           ${ev.location?`<span style="margin:0 4px;color:var(--ink-faint);">｜</span>${escapeHtml(ev.location)}`:''}
         </div>
         ${ev.content?`<div class="meta" style="margin-top:2px;"><span style="color:var(--ink-soft);">上課內容：</span>${escapeHtml(ev.content)}</div>`:''}
+        ${ev.checkNote?`<div class="check-note">⚠️ 待確認：${escapeHtml(ev.checkNote)}</div>`:''}
         ${visitLine}
       </div>
     </div>`;
@@ -3683,7 +3719,8 @@ function dbRowToSession(r){
     visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
     visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
     visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', locked: r.locked||false,
-    countedHours: (r.counted_hours===null || r.counted_hours===undefined) ? null : Number(r.counted_hours)
+    countedHours: (r.counted_hours===null || r.counted_hours===undefined) ? null : Number(r.counted_hours),
+    checkNote: r.check_note || ''
   };
 }
 
