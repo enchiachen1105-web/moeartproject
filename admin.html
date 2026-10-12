@@ -266,6 +266,13 @@
   tbody tr.week-header-row.month-a td{background:#FBF1DF; border-top-color:#EBD3A8; color:#8A6A3A;}
   tbody tr.week-header-row.month-b td{background:#EAF2F6; border-top-color:#BED5E2; color:#3F6578;}
   .week-count{font-weight:400; color:var(--ink-faint); margin-left:10px;}
+  tbody tr.week-header-row{cursor:pointer; user-select:none;}
+  .week-toggle{display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-right:8px; border:1px solid currentColor; border-radius:5px; font-size:13px; font-weight:700; line-height:1; vertical-align:middle; opacity:.75;}
+  .week-toggle::before{content:'−';}
+  tbody tr.week-header-row.week-collapsed .week-toggle::before{content:'＋';}
+  .week-hidden-note{display:none; margin-left:10px; font-size:11.5px; opacity:.8;}
+  tbody tr.week-header-row.week-collapsed .week-hidden-note{display:inline;}
+  tbody tr.week-row-hidden{display:none !important;}
   .visit-diamond{font-size:13px; margin-right:4px; vertical-align:middle;}
 
   @media (max-width:720px){
@@ -3186,7 +3193,10 @@ function renderListView(){
         const [wy,wm] = wk.split('-').map(Number);
         hr.classList.add(((wy*12+wm)%2===0) ? 'month-a' : 'month-b');
       }
-      hr.innerHTML = `<td colspan="9">${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span></td>`;
+      hr.dataset.week = wk;
+      if(collapsedWeeks.has(wk)) hr.classList.add('week-collapsed');
+      hr.title = '點一下收合／展開這一週';
+      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span><span class="week-hidden-note">（已收合）</span></td>`;
       tbody.appendChild(hr);
     }
     const tr = document.createElement('tr');
@@ -3201,6 +3211,8 @@ function renderListView(){
       <td data-label="地點">${escapeHtml(ev.location||'')}</td>
       <td data-label="訪視標記">${visitCheckboxesHTML(ev)}</td>
     `;
+    tr.dataset.week = wk;
+    if(collapsedWeeks.has(wk)) tr.classList.add('week-row-hidden');
     tbody.appendChild(tr);
     prev = ev;
   });
@@ -3272,6 +3284,18 @@ function findSessionByDataset(t){
 // Each tick is written straight to that one session row in the database
 // (not via the school-form saveData, which only ever saved a single school),
 // so every computer sees the same state after a reload / auto-refresh.
+$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+  const hr = e.target.closest('tr.week-header-row');
+  if(!hr || !hr.dataset.week) return;
+  const wk = hr.dataset.week;
+  const collapse = !collapsedWeeks.has(wk);
+  if(collapse) collapsedWeeks.add(wk); else collapsedWeeks.delete(wk);
+  saveCollapsedWeeks();
+  hr.classList.toggle('week-collapsed', collapse);
+  $$('#listTbody tr').forEach(r=>{
+    if(r!==hr && r.dataset.week===wk && !r.classList.contains('week-header-row')) r.classList.toggle('week-row-hidden', collapse);
+  });
+});
 $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
   const t = e.target;
   if(!t.matches) return;
@@ -3379,6 +3403,13 @@ function clampToProgramRange(){
 }
 
 let activeAdminMonthFilter = 'all';
+// 總覽清單：收起來的週（記在這台電腦的瀏覽器，重新整理後也維持）
+const COLLAPSED_WEEKS_KEY = 'artplan-admin-collapsed-weeks';
+let collapsedWeeks = new Set();
+try { collapsedWeeks = new Set(JSON.parse(localStorage.getItem(COLLAPSED_WEEKS_KEY) || '[]')); } catch(e) {}
+function saveCollapsedWeeks(){
+  try { localStorage.setItem(COLLAPSED_WEEKS_KEY, JSON.stringify([...collapsedWeeks])); } catch(e) {}
+}
 
 function renderAdminMonthFilterRow(){
   const el = $('#adminMonthFilterRow');
