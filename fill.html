@@ -111,6 +111,11 @@
   .session-card.collapsed .session-head{margin-bottom:0;}
   .session-card.collapsed .session-editor{display:none;}
   .session-card.collapsed .session-head .label{cursor:pointer;}
+  .session-head .label{cursor:pointer;}
+  .session-toggle{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; margin-right:6px; border:1.5px solid var(--border); border-radius:6px; background:#fff; color:var(--ink-soft); font-size:15px; font-weight:700; line-height:1; vertical-align:middle; user-select:none;}
+  .session-toggle::before{content:'−';}
+  .session-card.collapsed .session-toggle::before{content:'＋';}
+  .session-toggle:hover{border-color:var(--teal); color:var(--teal);}
   .sum-date{font-weight:700; color:var(--ink);}
   .sum-time{color:var(--ink-soft); margin:0 10px;}
   .sum-main{color:var(--ink-soft); font-weight:400;}
@@ -258,6 +263,8 @@
   /* 清單：每週一區（粗線＋週次標題） */
   tbody tr.week-header-row td{border-top:3px solid #D9CFC2; border-bottom:1px solid var(--border); background:#FAF7F2; font-size:12px; font-weight:500; color:var(--ink-faint); padding:5px 8px;}
   tbody tr.week-header-row:hover{background:transparent;}
+  tbody tr.week-header-row.month-a td{background:#FBF1DF; border-top-color:#EBD3A8; color:#8A6A3A;}
+  tbody tr.week-header-row.month-b td{background:#EAF2F6; border-top-color:#BED5E2; color:#3F6578;}
   .week-count{font-weight:400; color:var(--ink-faint); margin-left:10px;}
   .visit-diamond{font-size:13px; margin-right:4px; vertical-align:middle;}
 
@@ -270,6 +277,8 @@
     tbody tr.week-header-row{border:none; border-top:3px solid #D9CFC2; border-radius:0; background:#FAF7F2; margin:16px 0 8px; padding:5px 8px;}
     tbody tr.week-header-row td{border:none; display:block; padding:0;}
     tbody tr.week-header-row td::before{content:none;}
+    tbody tr.week-header-row.month-a{background:#FBF1DF; border-top-color:#EBD3A8;}
+    tbody tr.week-header-row.month-b{background:#EAF2F6; border-top-color:#BED5E2;}
   }
 
   /* calendar */
@@ -1479,7 +1488,7 @@ function addSessionRow(data, opts){
   wrap.dataset.id = data.id || uid();
   wrap.innerHTML = `
     <div class="session-head">
-      <span class="label"><span class="session-num">1.</span> <span class="sum-text">課程場次</span></span>
+      <span class="label"><span class="session-toggle" title="點一下展開／收合"></span><span class="session-num">1.</span> <span class="sum-text">課程場次</span></span>
       <span class="btn-row" style="gap:8px;">
         <span class="sum-tag"></span>
         <span class="conflict-badge" title="這筆與另一筆場次的日期、時間重疊">■ 時間重複</span>
@@ -1622,6 +1631,7 @@ function addSessionRow(data, opts){
   wrap.querySelector('.copySessionBtn').addEventListener('click', ()=>copySessionRow(wrap));
   wrap.querySelector('.session-head .label').addEventListener('click', ()=>{
     if(wrap.classList.contains('collapsed')) setRowCollapsed(wrap, false);
+    else { setRowCollapsed(wrap, true); applySessionMonthFilter(); }
   });
   wrap.addEventListener('input', ()=>refreshSessionSummary(wrap));
   wrap.addEventListener('change', ()=>refreshSessionSummary(wrap));
@@ -3219,6 +3229,10 @@ function renderListView(){
     if(newWeek){
       const hr = document.createElement('tr');
       hr.className = 'week-header-row';
+      if(wk && wk!=='none'){
+        const [wy,wm] = wk.split('-').map(Number);
+        hr.classList.add(((wy*12+wm)%2===0) ? 'month-a' : 'month-b');
+      }
       hr.innerHTML = `<td colspan="9">${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span></td>`;
       tbody.appendChild(hr);
     }
