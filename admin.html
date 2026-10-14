@@ -251,6 +251,20 @@
   .visit-filter-btn{font-size:12.5px; padding:5px 12px; border-radius:99px; border:1.5px solid var(--vf-color, var(--ink)); background:#fff; color:var(--vf-color, var(--ink)); cursor:pointer; font-family:inherit; font-weight:600;}
   .visit-filter-btn.active{background:var(--vf-color, var(--ink)); color:#fff;}
   .visit-filter-btn .vf-count{font-weight:400; opacity:.85; margin-left:3px;}
+  /* 標記學校：選了的學校在清單／月曆上用彩色記號標出來，不會把其他學校藏起來 */
+  .mark-select{font-size:12.5px; padding:5px 8px; border-radius:99px; border:1.5px dashed var(--border); background:#fff; color:var(--ink-soft); font-family:inherit; max-width:230px; width:auto;}
+  .mark-chip{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; padding:4px 6px 4px 10px; border-radius:99px; background:var(--mk-bg); color:var(--mk); border:1.5px solid var(--mk);}
+  .mark-chip .mk-count{font-weight:400; opacity:.85;}
+  .mark-chip button{border:none; background:transparent; color:var(--mk); cursor:pointer; font-size:13px; padding:0 3px; line-height:1; font-family:inherit;}
+  .mark-clear{font-size:12px; border:none; background:transparent; color:var(--ink-faint); cursor:pointer; text-decoration:underline; font-family:inherit;}
+  .mark-only-btn{font-size:12.5px; padding:4px 10px; border-radius:99px; border:1.5px solid var(--ink-soft); background:#fff; color:var(--ink-soft); cursor:pointer; font-family:inherit; font-weight:600;}
+  .mark-only-btn.active{background:var(--ink-soft); color:#fff;}
+  tbody tr.marked td{background:var(--mk-bg);}
+  tbody tr.marked td:first-child{box-shadow:inset 6px 0 0 var(--mk); padding-left:14px;}
+  .mark-star{color:var(--mk); margin-right:4px; font-size:13px;}
+  .week-mark-count{margin-left:10px; font-weight:700; color:var(--mk);}
+  .day-chip.marked{box-shadow:inset 0 0 0 2px var(--mk); font-weight:700;}
+  .ev-item.marked{border-left:6px solid var(--mk); padding-left:8px; background:var(--mk-bg);}
   input.committee-name-input{width:100px; height:auto; display:inline-block; font-size:12px; padding:3px 6px; margin:0; border:1px solid var(--border); border-radius:6px; font-family:inherit; vertical-align:middle;}
   .school-link{text-decoration:none; cursor:pointer;}
   .school-link:hover{filter:brightness(1.15); text-decoration:underline;}
@@ -284,6 +298,8 @@
     tbody tr.week-header-row{border:none; border-top:3px solid #D9CFC2; border-radius:0; background:#FAF7F2; margin:16px 0 8px; padding:5px 8px;}
     tbody tr.week-header-row td{border:none; display:block; padding:0;}
     tbody tr.week-header-row td::before{content:none;}
+    tbody tr.marked{border-left:6px solid var(--mk); background:var(--mk-bg);}
+    tbody tr.marked td:first-child{box-shadow:none; padding-left:0;}
     tbody tr.week-header-row.month-a{background:#FBF1DF; border-top-color:#EBD3A8;}
     tbody tr.week-header-row.month-b{background:#EAF2F6; border-top-color:#BED5E2;}
   }
@@ -403,6 +419,7 @@
         <div class="legend" id="colorLegend"></div>
         <div class="visit-filter-row" id="categoryFilterRow"></div>
         <div class="visit-filter-row" id="visitFilterRow"></div>
+        <div class="visit-filter-row" id="markSchoolRow"></div>
 
         <div class="month-filter-row" id="adminMonthFilterRow"></div>
 
@@ -3081,6 +3098,7 @@ function renderAdmin(){
   renderLegend();
   renderCategoryFilterRow();
   renderVisitFilterRow();
+  renderMarkSchoolRow();
   renderChangeLog();
   renderAdminMonthFilterRow();
   renderListView();
@@ -3148,6 +3166,7 @@ let activeVisitFilter = '';   // '' | visitPlanned | visitConfirmed | visitSuyu 
 function matchesFilter(ev){
   if(!matchesBaseFilter(ev)) return false;
   if(activeVisitFilter && !ev[activeVisitFilter]) return false;
+  if(markOnly && markedSchools.length && !markedSchools.includes(ev.schoolId)) return false;
   return true;
 }
 
@@ -3175,6 +3194,7 @@ function renderListView(){
   if(activeAdminMonthFilter !== 'all'){
     events = events.filter(ev=>ev.date && ev.date.startsWith(activeAdminMonthFilter));
   }
+  if(markOnly && markedSchools.length) events = events.filter(ev=>markedSchools.includes(ev.schoolId));
   const tbody = $('#listTbody');
   tbody.innerHTML = '';
   $('#listEmpty').style.display = events.length===0 ? 'block' : 'none';
@@ -3196,12 +3216,12 @@ function renderListView(){
       hr.dataset.week = wk;
       if(collapsedWeeks.has(wk)) hr.classList.add('week-collapsed');
       hr.title = '點一下收合／展開這一週';
-      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span><span class="week-hidden-note">（已收合）</span></td>`;
+      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span>${markedSchools.map(id=>{ const n = events.filter(e=>e.schoolId===id && weekStartKey(e.date)===wk).length; const m = markColorOf(id); return n ? `<span class="week-mark-count" style="--mk:${m.c};">★${n}</span>` : ''; }).join('')}<span class="week-hidden-note">（已收合）</span></td>`;
       tbody.appendChild(hr);
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td data-label="日期">${fmtDateDisplay(ev.date)}${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
+      <td data-label="日期">${markColorOf(ev.schoolId) ? '<span class="mark-star">★</span>' : ''}${fmtDateDisplay(ev.date)}${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
       <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
       <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${schoolColor(ev.schoolName, ev.category).bg};color:${schoolColor(ev.schoolName, ev.category).fg};" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)} ↗</a></td>
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
@@ -3213,6 +3233,8 @@ function renderListView(){
     `;
     tr.dataset.week = wk;
     if(collapsedWeeks.has(wk)) tr.classList.add('week-row-hidden');
+    const mk = markColorOf(ev.schoolId);
+    if(mk){ tr.classList.add('marked'); tr.style.setProperty('--mk', mk.c); tr.style.setProperty('--mk-bg', mk.bg); }
     tbody.appendChild(tr);
     prev = ev;
   });
@@ -3403,6 +3425,58 @@ function clampToProgramRange(){
 }
 
 let activeAdminMonthFilter = 'all';
+// 標記學校（記在這台電腦的瀏覽器）
+const MARKED_SCHOOLS_KEY = 'artplan-admin-marked-schools';
+const MARK_COLORS = ['#E5484D','#2F7FD8','#1E9E6A','#E88A1A','#8E5BD8','#D6409F'];
+let markedSchools = [];
+let markOnly = false;
+try { markedSchools = JSON.parse(localStorage.getItem(MARKED_SCHOOLS_KEY) || '[]'); if(!Array.isArray(markedSchools)) markedSchools = []; } catch(e) { markedSchools = []; }
+function saveMarkedSchools(){ try { localStorage.setItem(MARKED_SCHOOLS_KEY, JSON.stringify(markedSchools)); } catch(e) {} }
+function markColorOf(schoolId){
+  const i = markedSchools.indexOf(schoolId);
+  if(i < 0) return null;
+  const c = MARK_COLORS[i % MARK_COLORS.length];
+  return { c, bg: c + '14' };
+}
+function markStyleAttr(schoolId){
+  const m = markColorOf(schoolId);
+  return m ? ` style="--mk:${m.c};--mk-bg:${m.bg};"` : '';
+}
+function renderMarkSchoolRow(){
+  const el = $('#markSchoolRow');
+  if(!el) return;
+  markedSchools = markedSchools.filter(id => DATA.schools.some(s=>s.id===id));
+  const all = getAllEvents().filter(matchesBaseFilter);
+  let html = `<span class="vf-label">★ 標記學校：</span>`;
+  markedSchools.forEach(id=>{
+    const sc = DATA.schools.find(s=>s.id===id);
+    const m = markColorOf(id);
+    const n = all.filter(ev=>ev.schoolId===id).length;
+    html += `<span class="mark-chip" style="--mk:${m.c};--mk-bg:${m.bg};">★ ${escapeHtml(sc.name)}<span class="mk-count">${n}場</span><button type="button" data-unmark="${escapeHtml(id)}" title="取消標記">✕</button></span>`;
+  });
+  const opts = DATA.schools.filter(s=>!markedSchools.includes(s.id))
+    .map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.id.replace('school-',''))} ${escapeHtml(s.name)}</option>`).join('');
+  html += `<select class="mark-select" id="markSchoolSelect"><option value="">＋ 選一間學校來標記</option>${opts}</select>`;
+  if(markedSchools.length){
+    html += `<button type="button" class="mark-only-btn${markOnly?' active':''}" id="markOnlyBtn">${markOnly?'✓ 只看標記的學校':'只看標記的學校'}</button>`;
+    html += `<button type="button" class="mark-clear" id="markClearBtn">全部取消</button>`;
+  }
+  el.innerHTML = html;
+  const sel = el.querySelector('#markSchoolSelect');
+  sel.addEventListener('change', ()=>{
+    if(sel.value && !markedSchools.includes(sel.value)){ markedSchools.push(sel.value); saveMarkedSchools(); }
+    renderAdmin();
+  });
+  el.querySelectorAll('[data-unmark]').forEach(b=>b.addEventListener('click', ()=>{
+    markedSchools = markedSchools.filter(x=>x!==b.dataset.unmark);
+    if(!markedSchools.length) markOnly = false;
+    saveMarkedSchools(); renderAdmin();
+  }));
+  const ob = el.querySelector('#markOnlyBtn');
+  if(ob) ob.addEventListener('click', ()=>{ markOnly = !markOnly; renderAdmin(); });
+  const cb = el.querySelector('#markClearBtn');
+  if(cb) cb.addEventListener('click', ()=>{ markedSchools = []; markOnly = false; saveMarkedSchools(); renderAdmin(); });
+}
 // 總覽清單：收起來的週（記在這台電腦的瀏覽器，重新整理後也維持）
 const COLLAPSED_WEEKS_KEY = 'artplan-admin-collapsed-weeks';
 let collapsedWeeks = new Set();
@@ -3600,8 +3674,8 @@ function renderCalendar(){
     dayEvents.forEach(ev=>{
       const sc = schoolColor(ev.schoolName, ev.category);
       chipsHtml += `<div class="day-chip-wrap">`+
-        `<div class="day-chip" style="background:${sc.bg};color:${sc.fg};" title="${escapeHtml(chipTooltip(ev, visitNums))}">`+
-        `<span class="day-chip-name">${chipDiamondHTML(ev, visitNums)}${escapeHtml(ev.schoolName)}</span>`+
+        `<div class="day-chip${markColorOf(ev.schoolId)?' marked':''}" style="background:${sc.bg};color:${sc.fg};${markColorOf(ev.schoolId)?`--mk:${markColorOf(ev.schoolId).c};`:''}" title="${escapeHtml(chipTooltip(ev, visitNums))}">`+
+        `<span class="day-chip-name">${markColorOf(ev.schoolId)?`<span style="color:${markColorOf(ev.schoolId).c};">★</span>`:''}${chipDiamondHTML(ev, visitNums)}${escapeHtml(ev.schoolName)}</span>`+
         `</div>`+
         chipPeopleHTML(ev)+
         (ev.checkNote ? '<div class="chip-note">⚠ 待確認</div>' : '')+
@@ -3658,7 +3732,7 @@ function renderMonthList(){
     const visitLine = (flags.length || visitNumTag)
       ? `<div class="meta" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:3px;">${flags.map(f=>`<span style="display:inline-flex;align-items:center;gap:3px;color:${f.color};font-weight:700;"><span class="flag-dot" style="background:${f.color};"></span>${escapeHtml(f.label)}${(f.field==='visitCommittee' && ev.visitCommitteeName) ? '：'+escapeHtml(ev.visitCommitteeName) : ''}</span>`).join('')}${visitNumTag}</div>`
       : '';
-    return `<div class="ev-item">
+    return `<div class="ev-item${markColorOf(ev.schoolId)?' marked':''}"${markStyleAttr(ev.schoolId)}>
       <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
       <div class="ev-main">
         ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
