@@ -123,6 +123,9 @@
   .sum-tag-pill.changed{background:#FDEBD8; color:#A3501C;}
   .sum-tag-pill.new{background:#E3F2EF; color:#1F6F66;}
   .sum-tag-pill.warn{background:#FDE2E0; color:#C0392B;}
+  .sum-tag-pill.frozen{background:#ECEAE6; color:#6B6358;}
+  .session-card.frozen .session-toggle{visibility:hidden;}
+  .session-card.frozen .session-head .label{cursor:default;}
   .check-note{color:#C0392B; font-size:12px; font-weight:700; margin-top:4px; line-height:1.45;}
   .check-note-clear{margin-left:6px; font-size:11px; font-weight:700; padding:1px 8px; border:1px solid #F1B0A8; border-radius:99px; background:#fff; color:#C0392B; cursor:pointer; font-family:inherit;}
   .check-note-clear:hover{background:#FDECEA;}
@@ -1096,6 +1099,7 @@ function updateSessionWeekday(wrap){
 // 8月～1月＝上學期，2月～6月＝下學期
 function deriveSemester(dateStr){
   if(!dateStr) return '';
+  if(dateStr < PROGRAM_FIRST_DAY) return '上學期';
   const m = Number(dateStr.split('-')[1]);
   return (m>=8 || m<=1) ? '上學期' : '下學期';
 }
@@ -1463,6 +1467,8 @@ function addSessionRow(data, opts){
   const wrap = document.createElement('div');
   wrap.className = 'session-card';
   wrap.dataset.id = data.id || uid();
+  // 計畫期程（8/1）之前已上過的課：承辦人匯入後鎖定，學校端不能修改或移除
+  if(data.date && data.date < PROGRAM_FIRST_DAY){ wrap.dataset.frozen = '1'; wrap.classList.add('frozen'); }
   wrap.innerHTML = `
     <div class="session-head">
       <span class="label"><span class="session-toggle" title="點一下展開／收合"></span><span class="session-num">1.</span> <span class="sum-text">課程場次</span></span>
@@ -1689,12 +1695,17 @@ function refreshSessionSummary(wrap){
   }else if(!isBlankSession(v)){
     tag += '<span class="sum-tag-pill new">新增・未儲存</span>';
   }
+  if(wrap.dataset.frozen === '1') tag = '<span class="sum-tag-pill frozen" title="計畫期程前已完成的課程，由計畫承辦人匯入，無法修改">🔒 已完成・不可修改</span> ' + tag;
   wrap.querySelector('.sum-tag').innerHTML = tag;
   wrap.querySelector('.editSessionBtn').style.display = collapsed ? '' : 'none';
   wrap.querySelector('.doneSessionBtn').style.display = collapsed ? 'none' : '';
+  if(wrap.dataset.frozen === '1'){
+    ['.editSessionBtn','.doneSessionBtn','.copySessionBtn','.removeSessionBtn'].forEach(sel=>{ const b = wrap.querySelector(sel); if(b) b.style.display = 'none'; });
+  }
 }
 
 function setRowCollapsed(wrap, collapsed){
+  if(wrap.dataset.frozen === '1') collapsed = true;
   wrap.classList.toggle('collapsed', !!collapsed);
   refreshSessionSummary(wrap);
   updateExpandAllLabel();
@@ -1705,7 +1716,7 @@ function setRowLockState(wrap, locked){ setRowCollapsed(wrap, locked); }
 function updateExpandAllLabel(){
   const btn = document.getElementById('unlockAllBtn');
   if(!btn) return;
-  const anyCollapsed = $$('#sessionList .session-card').some(r=>r.classList.contains('collapsed'));
+  const anyCollapsed = $$('#sessionList .session-card').some(r=>r.classList.contains('collapsed') && r.dataset.frozen!=='1');
   btn.textContent = anyCollapsed ? '📂 全部展開' : '📁 全部收合';
 }
 
@@ -2396,8 +2407,9 @@ function goToSessionRow(row){
 // 全部展開／全部收合（修改原因改到按「儲存」時再一次說明）
 $('#unlockAllBtn')&&$('#unlockAllBtn').addEventListener('click', ()=>{
   const rows = $$('#sessionList .session-card');
-  const anyCollapsed = rows.some(r=>r.classList.contains('collapsed'));
-  rows.forEach(r=>{ r.classList.toggle('collapsed', !anyCollapsed); refreshSessionSummary(r); });
+  const open = rows.filter(r=>r.dataset.frozen!=='1');
+  const anyCollapsed = open.some(r=>r.classList.contains('collapsed'));
+  open.forEach(r=>{ r.classList.toggle('collapsed', !anyCollapsed); refreshSessionSummary(r); });
   applySessionMonthFilter();
   updateExpandAllLabel();
 });
