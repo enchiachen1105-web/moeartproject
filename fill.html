@@ -3224,7 +3224,7 @@ let activeVisitFilter = '';   // '' | visitPlanned | visitConfirmed | visitSuyu 
 function matchesFilter(ev){
   if(!matchesBaseFilter(ev)) return false;
   if(activeVisitFilter && !ev[activeVisitFilter]) return false;
-  if(markOnly && markedSchools.length && !markedSchools.includes(ev.schoolId)) return false;
+  if(markOnly && markedSchools.length && !evMark(ev)) return false;
   return true;
 }
 
@@ -3252,7 +3252,7 @@ function renderListView(){
   if(activeAdminMonthFilter !== 'all'){
     events = events.filter(ev=>ev.date && ev.date.startsWith(activeAdminMonthFilter));
   }
-  if(markOnly && markedSchools.length) events = events.filter(ev=>markedSchools.includes(ev.schoolId));
+  if(markOnly && markedSchools.length) events = events.filter(ev=>evMark(ev));
   const tbody = $('#listTbody');
   tbody.innerHTML = '';
   $('#listEmpty').style.display = events.length===0 ? 'block' : 'none';
@@ -3274,12 +3274,12 @@ function renderListView(){
       hr.dataset.week = wk;
       if(collapsedWeeks.has(wk)) hr.classList.add('week-collapsed');
       hr.title = '點一下收合／展開這一週';
-      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span>${markedSchools.map(id=>{ const n = events.filter(e=>e.schoolId===id && weekStartKey(e.date)===wk).length; const m = markColorOf(id); return n ? `<span class="week-mark-count" style="--mk:${m.c};">★${n}</span>` : ''; }).join('')}<span class="week-hidden-note">（已收合）</span></td>`;
+      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span>${markedSchools.map(id=>{ const n = events.filter(e=>markMatches(id, e) && weekStartKey(e.date)===wk).length; const m = markColorOf(id); return n ? `<span class="week-mark-count" style="--mk:${m.c};">★${n}</span>` : ''; }).join('')}<span class="week-hidden-note">（已收合）</span></td>`;
       tbody.appendChild(hr);
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td data-label="日期">${markColorOf(ev.schoolId) ? '<span class="mark-star">★</span>' : ''}${fmtDateDisplay(ev.date)}${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
+      <td data-label="日期">${evMark(ev) ? '<span class="mark-star">★</span>' : ''}${fmtDateDisplay(ev.date)}${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
       <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
       <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${schoolColor(ev.schoolName, ev.category).bg};color:${schoolColor(ev.schoolName, ev.category).fg};" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)} ↗</a></td>
       <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
@@ -3291,7 +3291,7 @@ function renderListView(){
     `;
     tr.dataset.week = wk;
     if(collapsedWeeks.has(wk)) tr.classList.add('week-row-hidden');
-    const mk = markColorOf(ev.schoolId);
+    const mk = evMark(ev);
     if(mk){ tr.classList.add('marked'); tr.style.setProperty('--mk', mk.c); tr.style.setProperty('--mk-bg', mk.bg); }
     tbody.appendChild(tr);
     prev = ev;
@@ -3424,7 +3424,7 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
   renderStats();
   if(activeView==='cal') syncAdminCalToMonthFilter();
   renderVisitFilterRow();
-  if(activeVisitFilter || field==='visitConfirmed') renderListView();
+  if(activeVisitFilter || field==='visitConfirmed' || (field==='visitPlanned' && markedSchools.includes(PLANNED_MARK))) renderListView();
   if(field==='visitPlanned') renderMarkSchoolRow();   // 篩選中取消勾選時該列即時消失；訪視確定變動時菱形次序即時更新
 
   try{
@@ -3489,41 +3489,42 @@ const MARKED_SCHOOLS_KEY = 'artplan-admin-marked-schools';
 const MARK_COLORS = ['#E5484D','#2F7FD8','#1E9E6A','#E88A1A','#8E5BD8','#D6409F'];
 let markedSchools = [];
 let markOnly = false;
-function plannedSchoolIds(){   // 有勾「訪視預計」的學校
-  return new Set(DATA.schools.filter(sc=>(sc.sessions||[]).some(x=>x.visitPlanned)).map(sc=>sc.id));
-}
+const PLANNED_MARK = '__planned__';   // 特別標記：所有勾「訪視預計」的場次
 try { markedSchools = JSON.parse(localStorage.getItem(MARKED_SCHOOLS_KEY) || '[]'); if(!Array.isArray(markedSchools)) markedSchools = []; } catch(e) { markedSchools = []; }
 function saveMarkedSchools(){ try { localStorage.setItem(MARKED_SCHOOLS_KEY, JSON.stringify(markedSchools)); } catch(e) {} }
-function markColorOf(schoolId){
-  const i = markedSchools.indexOf(schoolId);
+function markColorOf(id){
+  const i = markedSchools.indexOf(id);
   if(i < 0) return null;
   const c = MARK_COLORS[i % MARK_COLORS.length];
   return { c, bg: c + '14' };
 }
-function markStyleAttr(schoolId){
-  const m = markColorOf(schoolId);
+function markMatches(id, ev){ return id === PLANNED_MARK ? !!ev.visitPlanned : ev.schoolId === id; }
+function evMark(ev){   // 這一場有沒有被標記（學校標記優先，其次是「訪視預計」）
+  const m = markColorOf(ev.schoolId);
+  if(m) return m;
+  if(ev.visitPlanned) return markColorOf(PLANNED_MARK);
+  return null;
+}
+function markStyleAttr(ev){
+  const m = evMark(ev);
   return m ? ` style="--mk:${m.c};--mk-bg:${m.bg};"` : '';
 }
 function renderMarkSchoolRow(){
   const el = $('#markSchoolRow');
   if(!el) return;
-  markedSchools = markedSchools.filter(id => DATA.schools.some(s=>s.id===id));
+  markedSchools = markedSchools.filter(id => id === PLANNED_MARK || DATA.schools.some(s=>s.id===id));
   const all = getAllEvents().filter(matchesBaseFilter);
   let html = `<span class="vf-label">★ 標記學校：</span>`;
   markedSchools.forEach(id=>{
-    const sc = DATA.schools.find(s=>s.id===id);
     const m = markColorOf(id);
-    const n = all.filter(ev=>ev.schoolId===id).length;
-    html += `<span class="mark-chip" style="--mk:${m.c};--mk-bg:${m.bg};">★ ${escapeHtml(sc.name)}<span class="mk-count">${n}場</span><button type="button" data-unmark="${escapeHtml(id)}" title="取消標記">✕</button></span>`;
+    const n = all.filter(ev=>markMatches(id, ev)).length;
+    const name = id === PLANNED_MARK ? '訪視預計' : DATA.schools.find(s=>s.id===id).name;
+    html += `<span class="mark-chip" style="--mk:${m.c};--mk-bg:${m.bg};">★ ${escapeHtml(name)}<span class="mk-count">${n}場</span><button type="button" data-unmark="${escapeHtml(id)}" title="取消標記">✕</button></span>`;
   });
+  const plannedOpt = markedSchools.includes(PLANNED_MARK) ? '' : `<option value="${PLANNED_MARK}">◇ 訪視預計（標出預計要去的場次）</option>`;
   const opts = DATA.schools.filter(s=>!markedSchools.includes(s.id))
     .map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.id.replace('school-',''))} ${escapeHtml(s.name)}</option>`).join('');
-  html += `<select class="mark-select" id="markSchoolSelect"><option value="">＋ 選一間學校來標記</option>${opts}</select>`;
-  const plannedIds = [...plannedSchoolIds()];
-  const allPlannedMarked = plannedIds.length > 0 && plannedIds.every(id=>markedSchools.includes(id));
-  if(plannedIds.length){
-    html += `<button type="button" class="mark-only-btn${allPlannedMarked?' active':''}" id="markPlannedBtn" title="把有勾「訪視預計」的學校全部加上標記；再按一次取消">${allPlannedMarked?'✓ 已標記訪視預計的學校':'★ 標記訪視預計的學校'}（${plannedIds.length} 校）</button>`;
-  }
+  html += `<select class="mark-select" id="markSchoolSelect"><option value="">＋ 選一間學校來標記</option>${plannedOpt}${opts}</select>`;
   if(markedSchools.length){
     html += `<button type="button" class="mark-only-btn${markOnly?' active':''}" id="markOnlyBtn">${markOnly?'✓ 只看標記的學校':'只看標記的學校'}</button>`;
     html += `<button type="button" class="mark-clear" id="markClearBtn">全部取消</button>`;
@@ -3539,16 +3540,6 @@ function renderMarkSchoolRow(){
     if(!markedSchools.length) markOnly = false;
     saveMarkedSchools(); renderAdmin();
   }));
-  const pb = el.querySelector('#markPlannedBtn');
-  if(pb) pb.addEventListener('click', ()=>{
-    if(allPlannedMarked){
-      markedSchools = markedSchools.filter(id=>!plannedIds.includes(id));
-      if(!markedSchools.length) markOnly = false;
-    }else{
-      plannedIds.forEach(id=>{ if(!markedSchools.includes(id)) markedSchools.push(id); });
-    }
-    saveMarkedSchools(); renderAdmin();
-  });
   const ob = el.querySelector('#markOnlyBtn');
   if(ob) ob.addEventListener('click', ()=>{ markOnly = !markOnly; renderAdmin(); });
   const cb = el.querySelector('#markClearBtn');
@@ -3751,8 +3742,8 @@ function renderCalendar(){
     dayEvents.forEach(ev=>{
       const sc = schoolColor(ev.schoolName, ev.category);
       chipsHtml += `<div class="day-chip-wrap">`+
-        `<div class="day-chip${markColorOf(ev.schoolId)?' marked':''}" style="background:${sc.bg};color:${sc.fg};${markColorOf(ev.schoolId)?`--mk:${markColorOf(ev.schoolId).c};`:''}" title="${escapeHtml(chipTooltip(ev, visitNums))}">`+
-        `<span class="day-chip-name">${markColorOf(ev.schoolId)?`<span style="color:${markColorOf(ev.schoolId).c};">★</span>`:''}${chipDiamondHTML(ev, visitNums)}${escapeHtml(ev.schoolName)}</span>`+
+        `<div class="day-chip${evMark(ev)?' marked':''}" style="background:${sc.bg};color:${sc.fg};${evMark(ev)?`--mk:${evMark(ev).c};`:''}" title="${escapeHtml(chipTooltip(ev, visitNums))}">`+
+        `<span class="day-chip-name">${evMark(ev)?`<span style="color:${evMark(ev).c};">★</span>`:''}${chipDiamondHTML(ev, visitNums)}${escapeHtml(ev.schoolName)}</span>`+
         `</div>`+
         chipPeopleHTML(ev)+
         (ev.checkNote ? '<div class="chip-note">⚠ 待確認</div>' : '')+
@@ -3809,7 +3800,7 @@ function renderMonthList(){
     const visitLine = (flags.length || visitNumTag)
       ? `<div class="meta" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:3px;">${flags.map(f=>`<span style="display:inline-flex;align-items:center;gap:3px;color:${f.color};font-weight:700;"><span class="flag-dot" style="background:${f.color};"></span>${escapeHtml(f.label)}${(f.field==='visitCommittee' && ev.visitCommitteeName) ? '：'+escapeHtml(ev.visitCommitteeName) : ''}</span>`).join('')}${visitNumTag}</div>`
       : '';
-    return `<div class="ev-item${markColorOf(ev.schoolId)?' marked':''}"${markStyleAttr(ev.schoolId)}>
+    return `<div class="ev-item${evMark(ev)?' marked':''}"${markStyleAttr(ev)}>
       <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
       <div class="ev-main">
         ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
