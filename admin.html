@@ -3829,6 +3829,55 @@ function downloadFile(filename, content, mime){
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
+// 課程大綱摘要（20 字內）：規則式，不需網路
+function courseOutline(content, max){
+  max = max || 20;
+  let s = String(content || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+  if(!s) return '';
+  // 拆「課程名稱｜內容」
+  let title = '', body = s;
+  const bar = s.indexOf('｜');
+  if(bar >= 0){ title = s.slice(0, bar).trim(); body = s.slice(bar + 1).trim(); }
+  // 去掉括號註記：（寒假）（五年級，第3.4節）（A班）(全) 等
+  const stripNotes = t => t.replace(/[（(][^（）()]*[年][^（）()]*[班級][^（）()]*[）)]/g, '').replace(/[（(](?:寒假|暑假|學期末|暑假，計畫期程前已上課|[一二三四五六]年級[^）)]*|[A-Z]班[^）)]*|全|五、六|三、四|A、B班一起)[）)]/g, '').trim();
+  title = stripNotes(title).replace(/^第\d+次$/, '');
+  body = stripNotes(body);
+  // 去掉開頭的年級班別代碼、編號、標籤
+  body = body.replace(/^(?:[三四五六]年級|[3-6][A-Z]{1,2}|[三四五六][0-9]+(?:、[三四五六][0-9]+)*)\s*[—\-－:：]*\s*/, '')
+             .replace(/^(?:\d+-\d+[.、．]\s*|\d+[.、．]\s*)/, '')
+             .replace(/^(?:前場|後場|EX)[:：]\s*/, '')
+             .replace(/^(?:基本動作|旗術講解|旗的動作要領)\s*[—\-－:：]\s*/, '');
+  // 只取第一個子句
+  let first = body.split(/\s*(?:[。；;！!？?]|[:：]?\s*[（(]\d[）)]|\s\d+[.、．]|(?:\s|^)[2-9][.、．]|，(?=.{12,}))\s*/)[0].trim();
+  first = first.replace(/[，、,：:\-—]+$/, '').trim();
+  const cut = t => {
+    if(t.length <= max) return t;
+    const head = t.slice(0, max - 1);
+    const k = Math.max(head.lastIndexOf('、'), head.lastIndexOf('，'), head.lastIndexOf(','), head.lastIndexOf('/'), head.lastIndexOf(' '), head.lastIndexOf('：'));
+    return (k >= 8 ? head.slice(0, k) : head) + '…';
+  };
+  if(!title) return cut(first || body);
+  if(!first || first === title || title.includes(first)) return cut(title);
+  if(first.includes(title)) return cut(first);
+  // 內容第一句跟標題幾乎一樣（例：旗術—狂龍捲風組合／旗術之狂龍捲風組合）→ 用標題
+  const overlap = [...new Set(title)].filter(ch => first.includes(ch)).length / new Set(title).size;
+  if(overlap >= 0.7 && first.length <= title.length + 4) return cut(title);
+  // 標題的每個部分都已經出現在內容第一句（例：五禽戲—猿／五禽戲源流講解與動作要領—猿）→ 只用內容
+  const parts = title.split(/[—\-－]+/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length > 1 && parts.every(x=>first.includes(x))) return cut(first.length <= max ? first : title);
+  const combo = `${title}：${first}`;
+  if(combo.length <= max) return combo;
+  // 內容第一句放得下就用它（比課程名稱更能看出這堂在做什麼）
+  if(first.length >= 4 && first.length <= max) return first;
+  // 內容第一句太長時，取冒號前的重點（例：「上保護漆：對木板上…」→「上保護漆」）
+  const key = first.includes('：') ? first.split('：')[0].trim() : '';
+  if(key.length >= 2 && !title.includes(key)){
+    const combo2 = `${title}：${key}`;
+    if(combo2.length <= max) return combo2;
+  }
+  return cut(title.length >= 4 ? title : first);
+}
+
 // ===== 一鍵匯出行程表（Excel）：依日期時間排序，最後兩欄是學校承辦人員與聯絡電話 =====
 function loadExcelJS(){
   if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
@@ -3891,6 +3940,7 @@ async function exportItineraryXlsx(){
         const dc = row.getCell(1);
         if(dc.value instanceof Date) dc.numFmt = 'yyyy/mm/dd';
       });
+      columns.forEach((c,i)=>{ if(c[3]==='hidden') ws.getColumn(i+1).hidden = true; });
       ws.autoFilter = { from:{ row:1, column:1 }, to:{ row:1, column:columns.length } };
       ws.pageSetup = { orientation:'landscape', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0, printTitlesRow:'1:1' };
       return ws;
@@ -3900,7 +3950,7 @@ async function exportItineraryXlsx(){
     // 1) 訪視行程：有任何訪視標記的場次
     const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee);
     addSheet('訪視行程', [
-      ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['類別',8,'center'],['學校',24],['課程內容',38],
+      ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['類別',8,'center'],['學校',24],['課程大綱',26],['完整上課內容',50,'left','hidden'],
       ['授課藝師',14],['上課地點',18],['訪視狀態',10,'center'],['助理訪視',11,'center'],['訪視委員',14],['第幾次訪視',10,'center'],
       ['承辦人員',12],['聯絡電話',18]
     ], visits, ev=>{
@@ -3908,18 +3958,18 @@ async function exportItineraryXlsx(){
       const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':''].filter(Boolean).join('、');
       const committee = ev.visitCommittee ? (ev.visitCommitteeName || '委員') : '';
       const n = ev.visitConfirmed ? visitNums[ev.sessionId] : '';
-      return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.category, ev.schoolName, ev.content||'',
+      return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.category, ev.schoolName, courseOutline(ev.content), ev.content||'',
         ev.instructor||'', ev.location||'', ev.visitConfirmed?'確定':(ev.visitPlanned?'預計':''), helpers, committee,
         n ? `第 ${n} 次` : '', c.teacher, c.phone];
     });
 
     // 2) 全部課程行程
     addSheet('全部課程行程', [
-      ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['時數',6,'center'],['類別',8,'center'],['學校',24],['課程內容',40],
+      ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['時數',6,'center'],['類別',8,'center'],['學校',24],['課程大綱',26],['完整上課內容',50,'left','hidden'],
       ['授課藝師',14],['隨課老師',14],['上課地點',18],['訪視標記',16],['承辦人員',12],['聯絡電話',18]
     ], all, ev=>{
       const c = itineraryContact(ev);
-      return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.hours||'', ev.category, ev.schoolName, ev.content||'',
+      return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.hours||'', ev.category, ev.schoolName, courseOutline(ev.content), ev.content||'',
         ev.instructor||'', ev.companionTeacher||'', ev.location||'', visitMarksText(ev), c.teacher, c.phone];
     });
 
