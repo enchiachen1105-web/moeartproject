@@ -480,7 +480,7 @@
         <div class="card-title">匯出</div>
         <p class="help-text" style="margin-top:-4px;">「一鍵匯出全部學校」不受目前篩選條件影響，永遠匯出全部32校完整資料；其餘兩個按鈕會依目前篩選條件匯出。匯出 .ics 後，到 Google 日曆「設定 → 匯入與匯出 → 匯入」上傳即可。</p>
         <div class="btn-row">
-          <button class="btn btn-primary" id="exportAllCsvBtn">⤓ 一鍵匯出全部學校課程期程表（CSV）</button>
+          <button class="btn btn-primary" id="exportAllCsvBtn">⤓ 一鍵匯出行程表（Excel）</button>
           <button class="btn btn-teal" id="exportIcsBtn">⤓ 匯出 .ics（Google 日曆用）</button>
           <button class="btn btn-ghost" id="exportCsvBtn">⤓ 匯出目前篩選結果（CSV）</button>
         </div>
@@ -3829,26 +3829,116 @@ function downloadFile(filename, content, mime){
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
-$('#exportAllCsvBtn')&&$('#exportAllCsvBtn').addEventListener('click', ()=>{
-  // Always exports every school's every session, ignoring whatever filter
-  // is currently applied on screen — this is the "give me everything" button.
-  const events = getAllEvents();
-  if(events.length===0){ showToast('目前沒有任何已填寫的課程場次可匯出'); return; }
-  const header = ['學校','類別','配合藝師','學生人數/年級','學期','日期','開始時間','結束時間','時數','隨課老師','授課藝師','上課地點','上課內容','訪視標記'];
-  const csvEscape = (v)=>{
-    v = (v==null?'':String(v));
-    if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
-    return v;
-  };
-  const rows = events
-    .sort((a,b)=> (a.schoolName||'').localeCompare(b.schoolName||'','zh-Hant') || (a.date||'').localeCompare(b.date||''))
-    .map(ev=>[
-      ev.schoolName, ev.category, ev.collaboratingArtist, ev.studentInfo, ev.semester, ev.date, ev.startTime, ev.endTime, ev.hours, ev.companionTeacher, ev.instructor, ev.location, ev.content, visitMarksText(ev)
-    ].map(csvEscape).join(','));
-  const csv = '\uFEFF' + header.join(',') + '\r\n' + rows.join('\r\n');
-  downloadFile('全部學校課程期程表.csv', csv, 'text/csv;charset=utf-8');
-  showToast(`✓ 已匯出全部 ${DATA.schools.length} 校，共 ${events.length} 筆場次`);
-});
+// ===== 一鍵匯出行程表（Excel）：依日期時間排序，最後兩欄是學校承辦人員與聯絡電話 =====
+function loadExcelJS(){
+  if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = ()=> window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error('ExcelJS 載入失敗'));
+    s.onerror = ()=> reject(new Error('ExcelJS 載入失敗'));
+    document.head.appendChild(s);
+  });
+}
+function itinerarySort(a,b){
+  const da = a.date || '9999-99-99', db = b.date || '9999-99-99';
+  return da.localeCompare(db) || (a.startTime||'').localeCompare(b.startTime||'') || (a.schoolId||'').localeCompare(b.schoolId||'');
+}
+function itineraryContact(ev){
+  const sc = DATA.schools.find(s=>s.id===ev.schoolId) || {};
+  return { teacher: sc.contactTeacher || '', phone: sc.contactPhone || '' };
+}
+function itineraryDateCell(d){
+  if(!d) return '';
+  const [y,m,dd] = d.split('-').map(Number);
+  return new Date(Date.UTC(y, m-1, dd));  // ExcelJS 以 UTC 寫入，避免台灣時區差一天
+}
+async function exportItineraryXlsx(){
+  const all = getAllEvents().sort(itinerarySort);
+  if(all.length===0){ showToast('目前沒有任何已填寫的課程場次可匯出'); return; }
+  const btn = $('#exportAllCsvBtn');
+  if(btn){ btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = '匯出中…'; }
+  try{
+    const ExcelJS = await loadExcelJS();
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '藝師藝有計畫 115學年度';
+    const FONT = { name:'微軟正黑體', size:11 };
+    const thin = { style:'thin', color:{ argb:'FFBFBFBF' } };
+    const border = { top:thin, left:thin, bottom:thin, right:thin };
+    const MONTH_FILL = ['FFFBF1DF','FFEAF2F6'];
+    const visitNums = getVisitNumbers();
+
+    function addSheet(name, columns, events, rowOf){
+      const ws = wb.addWorksheet(name, { views:[{ state:'frozen', ySplit:1 }] });
+      ws.columns = columns.map(c=>({ header:c[0], key:c[0], width:c[1] }));
+      const head = ws.getRow(1);
+      head.height = 22;
+      head.eachCell(cell=>{
+        cell.font = { ...FONT, bold:true };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFD9D9D9' } };
+        cell.alignment = { vertical:'middle', horizontal:'center', wrapText:true };
+        cell.border = border;
+      });
+      events.forEach(ev=>{
+        const row = ws.addRow(rowOf(ev));
+        const m = ev.date ? Number(ev.date.slice(5,7)) : null;
+        row.eachCell({ includeEmpty:true }, (cell, col)=>{
+          cell.font = FONT;
+          cell.border = border;
+          cell.alignment = { vertical:'top', wrapText:true, horizontal: columns[col-1][2] || 'left' };
+          if(m) cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: MONTH_FILL[m % 2] } };
+        });
+        const dc = row.getCell(1);
+        if(dc.value instanceof Date) dc.numFmt = 'yyyy/mm/dd';
+      });
+      ws.autoFilter = { from:{ row:1, column:1 }, to:{ row:1, column:columns.length } };
+      ws.pageSetup = { orientation:'landscape', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0, printTitlesRow:'1:1' };
+      return ws;
+    }
+    const timeOf = ev => (ev.startTime||ev.endTime) ? `${ev.startTime||''}-${ev.endTime||''}` : '';
+
+    // 1) 訪視行程：有任何訪視標記的場次
+    const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee);
+    addSheet('訪視行程', [
+      ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['類別',8,'center'],['學校',24],['課程內容',38],
+      ['授課藝師',14],['上課地點',18],['訪視狀態',10,'center'],['助理訪視',11,'center'],['訪視委員',14],['第幾次訪視',10,'center'],
+      ['承辦人員',12],['聯絡電話',18]
+    ], visits, ev=>{
+      const c = itineraryContact(ev);
+      const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':''].filter(Boolean).join('、');
+      const committee = ev.visitCommittee ? (ev.visitCommitteeName || '委員') : '';
+      const n = ev.visitConfirmed ? visitNums[ev.sessionId] : '';
+      return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.category, ev.schoolName, ev.content||'',
+        ev.instructor||'', ev.location||'', ev.visitConfirmed?'確定':(ev.visitPlanned?'預計':''), helpers, committee,
+        n ? `第 ${n} 次` : '', c.teacher, c.phone];
+    });
+
+    // 2) 全部課程行程
+    addSheet('全部課程行程', [
+      ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['時數',6,'center'],['類別',8,'center'],['學校',24],['課程內容',40],
+      ['授課藝師',14],['隨課老師',14],['上課地點',18],['訪視標記',16],['承辦人員',12],['聯絡電話',18]
+    ], all, ev=>{
+      const c = itineraryContact(ev);
+      return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.hours||'', ev.category, ev.schoolName, ev.content||'',
+        ev.instructor||'', ev.companionTeacher||'', ev.location||'', visitMarksText(ev), c.teacher, c.phone];
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `藝師藝有_行程表_${todayDateKey()}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+    showToast(`✓ 已匯出行程表：訪視 ${visits.length} 筆、全部課程 ${all.length} 筆`);
+  }catch(err){
+    console.error(err);
+    showToast('Excel 匯出失敗（可能是網路問題），請稍後再試');
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = btn.dataset.label || '⤓ 一鍵匯出行程表（Excel）'; }
+  }
+}
+$('#exportAllCsvBtn')&&$('#exportAllCsvBtn').addEventListener('click', exportItineraryXlsx);
 
 $('#exportIcsBtn')&&$('#exportIcsBtn').addEventListener('click', ()=>{
   const events = getFilteredEventsFixed().filter(e=>e.date);
