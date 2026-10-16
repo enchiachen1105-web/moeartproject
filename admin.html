@@ -3179,7 +3179,6 @@ function matchesFilter(ev){
   if(!matchesBaseFilter(ev)) return false;
   if(activeVisitFilter && !ev[activeVisitFilter]) return false;
   if(markOnly && markedSchools.length && !markedSchools.includes(ev.schoolId)) return false;
-  if(plannedSchoolsOnly && !plannedSchoolIds().has(ev.schoolId)) return false;
   return true;
 }
 
@@ -3379,7 +3378,7 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
   renderStats();
   if(activeView==='cal') syncAdminCalToMonthFilter();
   renderVisitFilterRow();
-  if(activeVisitFilter || field==='visitConfirmed' || (plannedSchoolsOnly && field==='visitPlanned')) renderListView();
+  if(activeVisitFilter || field==='visitConfirmed') renderListView();
   if(field==='visitPlanned') renderMarkSchoolRow();   // 篩選中取消勾選時該列即時消失；訪視確定變動時菱形次序即時更新
 
   try{
@@ -3444,8 +3443,7 @@ const MARKED_SCHOOLS_KEY = 'artplan-admin-marked-schools';
 const MARK_COLORS = ['#E5484D','#2F7FD8','#1E9E6A','#E88A1A','#8E5BD8','#D6409F'];
 let markedSchools = [];
 let markOnly = false;
-let plannedSchoolsOnly = false;   // 只看有「訪視預計」的學校（顯示這些學校的全部課程）
-function plannedSchoolIds(){
+function plannedSchoolIds(){   // 有勾「訪視預計」的學校
   return new Set(DATA.schools.filter(sc=>(sc.sessions||[]).some(x=>x.visitPlanned)).map(sc=>sc.id));
 }
 try { markedSchools = JSON.parse(localStorage.getItem(MARKED_SCHOOLS_KEY) || '[]'); if(!Array.isArray(markedSchools)) markedSchools = []; } catch(e) { markedSchools = []; }
@@ -3475,8 +3473,11 @@ function renderMarkSchoolRow(){
   const opts = DATA.schools.filter(s=>!markedSchools.includes(s.id))
     .map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.id.replace('school-',''))} ${escapeHtml(s.name)}</option>`).join('');
   html += `<select class="mark-select" id="markSchoolSelect"><option value="">＋ 選一間學校來標記</option>${opts}</select>`;
-  const plannedN = plannedSchoolIds().size;
-  html += `<button type="button" class="mark-only-btn${plannedSchoolsOnly?' active':''}" id="plannedOnlyBtn" title="只顯示有勾「訪視預計」的學校（含這些學校的全部課程）">${plannedSchoolsOnly?'✓ ':''}只看訪視預計的學校（${plannedN} 校）</button>`;
+  const plannedIds = [...plannedSchoolIds()];
+  const allPlannedMarked = plannedIds.length > 0 && plannedIds.every(id=>markedSchools.includes(id));
+  if(plannedIds.length){
+    html += `<button type="button" class="mark-only-btn${allPlannedMarked?' active':''}" id="markPlannedBtn" title="把有勾「訪視預計」的學校全部加上標記；再按一次取消">${allPlannedMarked?'✓ 已標記訪視預計的學校':'★ 標記訪視預計的學校'}（${plannedIds.length} 校）</button>`;
+  }
   if(markedSchools.length){
     html += `<button type="button" class="mark-only-btn${markOnly?' active':''}" id="markOnlyBtn">${markOnly?'✓ 只看標記的學校':'只看標記的學校'}</button>`;
     html += `<button type="button" class="mark-clear" id="markClearBtn">全部取消</button>`;
@@ -3492,8 +3493,16 @@ function renderMarkSchoolRow(){
     if(!markedSchools.length) markOnly = false;
     saveMarkedSchools(); renderAdmin();
   }));
-  const pb = el.querySelector('#plannedOnlyBtn');
-  if(pb) pb.addEventListener('click', ()=>{ plannedSchoolsOnly = !plannedSchoolsOnly; renderAdmin(); });
+  const pb = el.querySelector('#markPlannedBtn');
+  if(pb) pb.addEventListener('click', ()=>{
+    if(allPlannedMarked){
+      markedSchools = markedSchools.filter(id=>!plannedIds.includes(id));
+      if(!markedSchools.length) markOnly = false;
+    }else{
+      plannedIds.forEach(id=>{ if(!markedSchools.includes(id)) markedSchools.push(id); });
+    }
+    saveMarkedSchools(); renderAdmin();
+  });
   const ob = el.querySelector('#markOnlyBtn');
   if(ob) ob.addEventListener('click', ()=>{ markOnly = !markOnly; renderAdmin(); });
   const cb = el.querySelector('#markClearBtn');
