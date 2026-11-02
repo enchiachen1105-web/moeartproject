@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 
   :root{
@@ -354,6 +354,335 @@
   .loading-msg{text-align:center; padding:60px 0; color:var(--ink-faint); font-size:13.5px;}
 
 .tabs{display:none !important;}
+
+/* =====================================================================
+   2026 視覺改版（只改外觀，不動任何功能）
+   主色：#111111 墨黑；強調色：#5E5CE6 藍紫。其餘顏色只用在「類別／訪視／標記」這些有意義的標示上。
+   ===================================================================== */
+:root{
+  --bg:#F5F5F7;
+  --surface:#FFFFFF;
+  --border:#ECECEF;
+  --ink:#111111;
+  --ink-soft:#5F6168;
+  --ink-faint:#9A9CA3;
+  --accent:#5E5CE6;
+  --accent-dark:#4845C9;
+  --accent-soft:#EEEEFD;
+  --teal:#1D1D1F;
+  --teal-soft:#EDEDF0;
+  --danger:#D93A3A;
+  --radius:20px;
+  --shadow:0 0 0 1px rgba(0,0,0,0.035), 0 4px 30px rgba(0,0,0,0.03);
+  --shadow-hover:0 0 0 1px rgba(0,0,0,0.04), 0 10px 40px rgba(0,0,0,0.07);
+  --fill:#F4F4F6;
+  --fill-strong:#EBEBEF;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+  --glow:0 0 0 4px rgba(94,92,230,0.16);
+}
+html{background:var(--bg);}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFang TC','Microsoft JhengHei',sans-serif;
+  font-feature-settings:'tnum' 1, 'cv11' 1;
+  letter-spacing:0.005em;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+h1,h2,h3,.cal-head .month-label,.modal-box h3,.stat-box .v{font-family:inherit; letter-spacing:-0.01em;}
+::selection{background:rgba(94,92,230,0.18);}
+
+/* ---------- 全域平滑過渡 ---------- */
+button, a, input, select, textarea, label,
+.btn, .card, .stat-box, .session-card, .session-toggle, .cal-cell, .mini-month-card,
+.month-tab, .cat-filter-btn, .visit-filter-btn, .mark-chip, .mark-only-btn, .mark-select,
+.day-chip-wrap, .ev-item, .changelog-item, tbody tr, tbody td, .multi-entry-summary,
+.accordion-chevron, .expand-arrow, .week-toggle, .check-note-clear, .review-quick button, .chip-link, .school-link{
+  transition:all 0.3s var(--ease);
+}
+
+/* ---------- 淡入 ---------- */
+@keyframes ui-fade-up{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;}}
+@keyframes ui-fade{from{opacity:0;} to{opacity:1;}}
+@keyframes ui-pop{from{opacity:0; transform:translateY(12px) scale(0.97);} to{opacity:1; transform:none;}}
+#content > *{animation:ui-fade-up 0.6s var(--ease) both;}
+#content > *:nth-child(2){animation-delay:.05s;}
+#content > *:nth-child(3){animation-delay:.1s;}
+#content > *:nth-child(4){animation-delay:.15s;}
+#content > *:nth-child(5){animation-delay:.2s;}
+#content > *:nth-child(n+6){animation-delay:.25s;}
+.panel.active, .session-card:not(.collapsed) .session-editor, .multi-entry-body{animation:ui-fade 0.35s var(--ease) both;}
+.loading-msg{animation:ui-fade 0.4s var(--ease) both;}
+
+/* ---------- 版面與頁首 ---------- */
+.layout{max-width:1200px; margin:0 auto; padding:0 32px 120px;}
+.main{min-width:0;}
+.top-bar{
+  position:sticky; top:0; z-index:40;
+  display:flex; align-items:center; gap:12px;
+  margin:0 -32px 32px; padding:18px 32px;
+  background:rgba(245,245,247,0.78);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:0 1px 0 rgba(0,0,0,0.04);
+}
+.top-bar .brand{display:flex; align-items:center; gap:12px; font-size:14px; font-weight:600; color:var(--ink); letter-spacing:0.02em;}
+.top-bar .brand::before{
+  content:''; width:26px; height:26px; border-radius:8px; flex-shrink:0;
+  background:linear-gradient(135deg,#7B79FF 0%,#5E5CE6 55%,#3D3BB8 100%);
+  box-shadow:0 4px 14px rgba(94,92,230,0.35), inset 0 1px 0 rgba(255,255,255,0.35);
+}
+
+/* ---------- 卡片 ---------- */
+.card{
+  background:var(--surface); border:none; border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:32px 36px; margin-bottom:28px;
+}
+.card-title{font-size:17px; font-weight:700; margin-bottom:22px; gap:10px; letter-spacing:-0.005em;}
+.card-title .num{margin-right:2px; flex-shrink:0; width:24px; height:24px; font-size:12px; background:var(--ink); font-family:inherit; box-shadow:0 2px 8px rgba(0,0,0,0.15);}
+.help-text{color:var(--ink-faint); font-size:12.5px;}
+.section-divider{border-top:1px solid var(--border); margin:28px 0;}
+
+.help-card{
+  background:linear-gradient(135deg,#F3F2FF 0%,#FAFAFF 60%,#FFFFFF 100%) !important;
+  border:none !important;
+  box-shadow:0 0 0 1px rgba(94,92,230,0.10), 0 4px 30px rgba(94,92,230,0.06) !important;
+  padding:26px 32px !important;
+}
+.help-card ol{line-height:2; color:var(--ink-soft);}
+.help-card ol b{color:var(--ink);}
+
+/* ---------- 統計數字 ---------- */
+.stat-row{gap:24px; margin-bottom:28px;}
+.stat-box{
+  border:none; border-radius:var(--radius); box-shadow:var(--shadow);
+  padding:28px 30px; position:relative; overflow:hidden;
+}
+.stat-box::after{
+  content:''; position:absolute; right:-40px; top:-40px; width:120px; height:120px; border-radius:50%;
+  background:radial-gradient(circle, rgba(94,92,230,0.10), rgba(94,92,230,0) 70%);
+}
+.stat-box:hover{box-shadow:var(--shadow-hover); transform:translateY(-2px);}
+.stat-box .v{font-size:36px; font-weight:700; color:var(--ink); line-height:1.15; font-variant-numeric:tabular-nums;}
+.stat-box .l{font-size:13px; color:var(--ink-faint); margin-top:6px; font-weight:500;}
+
+/* ---------- 按鈕 ---------- */
+.btn{
+  border:none; border-radius:12px; padding:11px 20px; font-size:14px; font-weight:600;
+  letter-spacing:0.01em; gap:8px; will-change:transform;
+}
+.btn:hover:not(:disabled){transform:scale(1.02);}
+.btn:active:not(:disabled){transform:scale(0.98);}
+.btn:focus-visible{outline:none; box-shadow:var(--glow);}
+.btn:disabled{opacity:.35;}
+.btn-primary{background:var(--accent); color:#fff; box-shadow:0 1px 2px rgba(94,92,230,0.3), inset 0 1px 0 rgba(255,255,255,0.18);}
+.btn-primary:hover:not(:disabled){background:var(--accent-dark); box-shadow:0 8px 26px rgba(94,92,230,0.35), 0 0 0 4px rgba(94,92,230,0.10);}
+.btn-teal{background:var(--ink); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);}
+.btn-teal:hover:not(:disabled){opacity:1; background:#000; box-shadow:0 8px 26px rgba(0,0,0,0.22), 0 0 0 4px rgba(0,0,0,0.05);}
+.btn-ghost{background:var(--fill); color:var(--ink); border:none;}
+.btn-ghost:hover:not(:disabled){background:var(--fill-strong); color:var(--ink); box-shadow:0 6px 20px rgba(0,0,0,0.06);}
+.btn-ghost.active, .view-toggle .btn.active{background:var(--ink); color:#fff; border:none; box-shadow:0 6px 18px rgba(0,0,0,0.16);}
+.btn-danger-text{border-radius:8px; padding:5px 8px;}
+.btn-danger-text:hover:not(:disabled){background:rgba(217,58,58,0.08); transform:none;}
+.btn-sm{padding:7px 14px; font-size:13px; border-radius:10px;}
+.btn-row{gap:12px;}
+
+/* ---------- 輸入框 ---------- */
+@keyframes ui-breathe{
+  0%,100%{box-shadow:0 0 0 4px rgba(94,92,230,0.16), 0 0 18px rgba(94,92,230,0.10);}
+  50%{box-shadow:0 0 0 6px rgba(94,92,230,0.09), 0 0 26px rgba(94,92,230,0.16);}
+}
+label{font-size:12.5px; color:var(--ink-soft); font-weight:500; margin-bottom:7px;}
+input[type=text], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]), select, textarea{
+  border:1px solid transparent; border-radius:12px; padding:11px 14px;
+  background:var(--fill); color:var(--ink); font-size:14px;
+}
+input[type=text]:hover:not(:disabled):not([readonly]), input[type=tel]:hover:not(:disabled), input[type=date]:hover:not(:disabled),
+input[type=time]:hover:not(:disabled), input[type=number]:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled){background:var(--fill-strong);}
+input:focus, select:focus, textarea:focus{
+  outline:none; outline-offset:0; background:#fff; border-color:var(--accent);
+  animation:ui-breathe 2.4s ease-in-out infinite;
+}
+input[type=checkbox]:focus, input[type=radio]:focus{animation:none; outline:2px solid rgba(94,92,230,0.35); outline-offset:1px;}
+input[type=checkbox], input[type=radio]{accent-color:var(--accent);}
+input[readonly]{background:#F0F0F2; color:var(--ink-soft);}
+select:disabled, input:disabled{background:#F0F0F2; color:var(--ink-faint); opacity:1;}
+input::placeholder, textarea::placeholder{color:#B4B6BC;}
+.s-date-y, .s-date-m, .s-date-d{padding:11px 4px;}
+.grid-row{gap:16px; margin-bottom:20px;}
+.filter-bar{gap:16px; margin-bottom:6px;}
+input.committee-name-input{border:1px solid transparent; background:var(--fill); border-radius:8px; padding:4px 8px;}
+.auto-hint{color:var(--accent); font-weight:500;}
+.field-err{color:var(--danger);}
+
+/* ---------- 多選下拉（人員／年級） ---------- */
+.multi-entry-summary{border:none; background:var(--fill); border-radius:12px; padding:11px 14px;}
+.multi-entry-summary:hover{background:var(--fill-strong);}
+.multi-entry-summary.open{background:#fff; box-shadow:0 0 0 1px var(--accent), var(--glow);}
+
+/* ---------- 課時列 ---------- */
+.hours-bar{background:var(--fill); border:none; border-radius:14px; padding:14px 18px;}
+.hours-bar-value{font-size:16px;}
+
+/* ---------- 課程場次卡（填表頁） ---------- */
+.session-card{
+  border:none; border-radius:16px; padding:20px 22px; margin-bottom:14px;
+  background:#FAFAFB; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.04);
+}
+.session-card:not(.collapsed){background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,0.05), 0 6px 30px rgba(0,0,0,0.05);}
+.session-card.collapsed, .session-card.locked-card{background:#F7F7F9;}
+.session-card.collapsed{padding:13px 20px;}
+.session-card.collapsed:hover{background:#F1F1F4; transform:translateY(-1px);}
+.session-head{margin-bottom:16px;}
+.session-head .label{color:var(--ink);}
+.session-toggle{border:none; background:var(--fill-strong); border-radius:8px; width:24px; height:24px; color:var(--ink-soft);}
+.session-toggle:hover{background:var(--ink); color:#fff;}
+.session-hours, .session-num{color:var(--ink-faint);}
+@keyframes ui-highlight{0%{box-shadow:0 0 0 3px var(--accent);}70%{box-shadow:0 0 0 10px rgba(94,92,230,0);}100%{box-shadow:0 0 0 1px rgba(0,0,0,0.05);}}
+.session-card.highlight{animation:ui-highlight 1.2s var(--ease);}
+.sum-tag-pill{padding:2px 10px; font-weight:600;}
+.sum-tag-pill.new{background:var(--accent-soft); color:var(--accent-dark);}
+.sum-tag-pill.frozen{background:#ECECEF; color:var(--ink-soft);}
+.conflict-badge{color:var(--accent-dark);}
+
+/* ---------- 底部儲存列 ---------- */
+.save-bar{
+  background:rgba(255,255,255,0.82);
+  backdrop-filter:saturate(180%) blur(18px); -webkit-backdrop-filter:saturate(180%) blur(18px);
+  border-top:none; border-radius:16px; padding:14px 18px; margin-top:20px;
+  box-shadow:0 0 0 1px rgba(0,0,0,0.04), 0 -8px 30px rgba(0,0,0,0.05);
+}
+.save-status.dirty{color:var(--danger);}
+
+/* ---------- 提醒、異動 ---------- */
+.check-note{color:var(--danger); font-weight:600;}
+.check-note-clear{border:none; background:rgba(217,58,58,0.08); color:var(--danger); padding:2px 10px;}
+.check-note-clear:hover{background:rgba(217,58,58,0.16);}
+.s-check-note{background:#FFF3F2; border:none; border-radius:12px; padding:12px 16px; color:#C0362F; box-shadow:inset 3px 0 0 #E5484D;}
+.changelog-item{border-bottom:1px solid #F1F1F3; padding:14px 0;}
+.changelog-item.conflict{background:#FFF4F3; border-radius:14px; padding:14px 16px;}
+.review-quick button{border:none; background:var(--fill); padding:5px 12px;}
+.review-quick button:hover{background:var(--fill-strong);}
+.empty-state{padding:48px 20px;}
+
+/* ---------- 對話框與提示 ---------- */
+.modal-overlay{background:rgba(17,17,20,0.32); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); animation:ui-fade 0.25s var(--ease) both;}
+.modal-box{border-radius:24px; padding:32px; box-shadow:0 0 0 1px rgba(0,0,0,0.04), 0 30px 80px rgba(0,0,0,0.18); animation:ui-pop 0.35s var(--ease) both;}
+.modal-box h3{font-size:19px; margin-bottom:10px;}
+.modal-box textarea{border:1px solid transparent; background:var(--fill); border-radius:12px; padding:11px 14px;}
+.toast{background:rgba(17,17,17,0.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-radius:14px; padding:13px 22px; box-shadow:0 12px 40px rgba(0,0,0,0.2); transition:opacity .3s var(--ease), transform .3s var(--ease);}
+
+/* ---------- 篩選膠囊 ---------- */
+.month-filter-row, .visit-filter-row{gap:8px;}
+.month-filter-row{margin-bottom:22px;}
+.visit-filter-row{margin:4px 0 16px;}
+.visit-filter-row .vf-label{font-weight:600; color:var(--ink-faint); font-size:12px; letter-spacing:0.02em;}
+.month-tab, .cat-filter-btn, .visit-filter-btn, .mark-only-btn{padding:6px 15px; font-weight:600; border-width:1px;}
+.month-tab:hover, .cat-filter-btn:hover, .visit-filter-btn:hover, .mark-only-btn:hover{transform:scale(1.03);}
+.month-tab{border:1px solid transparent; background:var(--fill); color:var(--ink-soft);}
+.month-tab[data-month="all"]{border-color:transparent;}
+.month-tab.sem-upper{border-color:rgba(94,92,230,0.22); background:#fff; color:var(--accent-dark);}
+.month-tab.sem-lower{border-color:rgba(0,0,0,0.12); background:#fff; color:var(--ink);}
+.month-tab.active, .month-tab[data-month="all"].active{box-shadow:0 6px 18px rgba(0,0,0,0.12);}
+.month-tab.sem-upper.active{box-shadow:0 6px 18px rgba(94,92,230,0.35);}
+.cat-filter-btn{border:1px solid color-mix(in srgb, var(--cf-fg, #111) 28%, transparent);}
+.visit-filter-btn{border:1px solid color-mix(in srgb, var(--vf-color, #111) 30%, transparent);}
+.cat-filter-btn.active, .visit-filter-btn.active{box-shadow:0 6px 16px rgba(0,0,0,0.10);}
+.mark-only-btn{border:1px solid rgba(0,0,0,0.12); color:var(--ink-soft);}
+.mark-only-btn.active{background:var(--ink); border-color:var(--ink);}
+.mark-select{border:1px dashed #CFD0D6; background:#fff; padding:6px 12px; width:auto;}
+.mark-select:hover{border-color:var(--accent); color:var(--accent-dark);}
+.mark-chip{border:none; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--mk) 40%, transparent); padding:5px 8px 5px 12px;}
+.mark-chip button{border-radius:50%; width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center;}
+.mark-chip button:hover{background:color-mix(in srgb, var(--mk) 15%, transparent);}
+.legend{gap:14px; color:var(--ink-faint); margin:14px 0 20px;}
+.chip-link{color:var(--accent);}
+.content-toggle{color:var(--accent);}
+.content-cell.truncated:hover{color:var(--accent-dark);}
+
+/* ---------- 表格 ---------- */
+.table-wrap{border-radius:16px;}
+table{font-size:13.5px;}
+thead th{font-size:11.5px; font-weight:600; color:var(--ink-faint); letter-spacing:0.04em; border-bottom:1px solid var(--border); padding:12px 12px;}
+tbody td{padding:14px 12px; border-bottom:1px solid #F2F2F4;}
+tbody tr:hover{background:#FAFAFC;}
+tbody tr.week-header-row td{border-top:none; border-bottom:none; background:#F6F6F8; color:var(--ink-soft); font-weight:600; padding:10px 14px; font-size:12px;}
+tbody tr.week-header-row td{box-shadow:inset 0 10px 0 #fff;}
+tbody tr.week-header-row.month-a td{background:#F2F2FE; color:#4845C9; border-top:none; box-shadow:inset 0 10px 0 #fff, inset 3px 0 0 #8E8CF0;}
+tbody tr.week-header-row.month-b td{background:#F4F4F6; color:#46484E; border-top:none; box-shadow:inset 0 10px 0 #fff, inset 3px 0 0 #B9BBC2;}
+tbody tr.week-header-row td{padding-top:20px;}
+tbody tr.week-header-row:hover td{filter:brightness(0.985);}
+.week-toggle{border:none; background:rgba(255,255,255,0.8); border-radius:6px; width:20px; height:20px; opacity:1; box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+.week-count{color:inherit; opacity:.65; font-weight:500;}
+tbody tr.marked td{background:var(--mk-bg);}
+.cat-tag, .badge{font-weight:600; border-radius:6px;}
+.school-link{border-radius:99px;}
+.school-link:hover{filter:brightness(1.05); text-decoration:none; box-shadow:0 4px 12px rgba(0,0,0,0.12);}
+
+/* ---------- 月曆 ---------- */
+.cal-head{margin-bottom:16px;}
+.cal-head .month-label{font-size:20px;}
+.cal-grid{gap:6px;}
+.cal-dow{font-weight:600; letter-spacing:0.04em; padding:6px 0;}
+.cal-cell{border:none; background:#FAFAFB; border-radius:12px; padding:7px 7px; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.03);}
+.cal-cell:hover{background:#F2F2F5;}
+.cal-cell.out{background:transparent; box-shadow:none; opacity:.4;}
+.cal-cell.selected{box-shadow:inset 0 0 0 2px var(--accent), 0 6px 20px rgba(94,92,230,0.15); background:#fff;}
+.cal-cell.today .d{color:#fff; background:var(--accent); border-radius:99px; display:inline-block; min-width:22px; padding:0 6px; text-align:center;}
+.cal-cell .d{font-weight:600;}
+.day-chip-wrap{border-radius:6px;}
+.day-chip-wrap:hover{transform:translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.12);}
+.year-grid{gap:22px;}
+.mini-month-card{border:none; border-radius:16px; box-shadow:var(--shadow);}
+.mini-month-card:hover{box-shadow:var(--shadow-hover); transform:translateY(-3px);}
+.mini-month-header{padding:11px 14px; font-size:13.5px;}
+.mini-month-header.sem-upper{background:var(--accent);}
+.mini-month-header.sem-lower{background:var(--ink);}
+.mini-month-body{padding:8px;}
+.micro-cell{border-radius:4px;}
+.ev-item{border-bottom:1px solid #F2F2F4; padding:13px 0;}
+.ev-item.marked{border-left:none; box-shadow:inset 4px 0 0 var(--mk); padding-left:14px; border-radius:6px;}
+.accordion-toggle{font-size:16px;}
+.accordion-toggle:hover{color:var(--accent);}
+
+/* ---------- 手機 ---------- */
+@media (max-width:720px){
+  .layout{padding:0 16px 100px;}
+  .top-bar{margin:0 -16px 20px; padding:14px 16px;}
+  .top-bar .brand{font-size:13px;}
+  .card{padding:22px 20px; margin-bottom:18px; border-radius:18px;}
+  .help-card{padding:20px !important;}
+  .stat-row{gap:12px; margin-bottom:18px;}
+  .stat-box{padding:20px 22px;}
+  .stat-box .v{font-size:30px;}
+  tbody tr{border:none; background:#fff; border-radius:14px; box-shadow:0 0 0 1px rgba(0,0,0,0.05), 0 4px 18px rgba(0,0,0,0.04); padding:12px 14px; margin-bottom:12px;}
+  tbody td{border:none; padding:5px 0;}
+  tbody tr.week-header-row{border:none; border-radius:10px; box-shadow:none; margin:20px 0 10px; padding:8px 12px; background:#F4F4F6;}
+  tbody tr.week-header-row td, tbody tr.week-header-row.month-a td, tbody tr.week-header-row.month-b td{box-shadow:none; padding:0; background:transparent !important;}
+  tbody tr.week-header-row.month-a{background:#F2F2FE; box-shadow:inset 3px 0 0 #8E8CF0;}
+  tbody tr.week-header-row.month-b{background:#F4F4F6; box-shadow:inset 3px 0 0 #B9BBC2;}
+  tbody tr.marked{border-left:none; box-shadow:inset 5px 0 0 var(--mk), 0 4px 18px rgba(0,0,0,0.04);}
+  .session-card{padding:16px;}
+  .modal-box{padding:24px 20px; border-radius:20px;}
+}
+
+/* 版面細修 */
+.layout{max-width:1320px;}
+.btn{white-space:nowrap;}
+input, select, textarea{min-width:0; max-width:100%;}
+.grid-row > *{min-width:0;}
+@media (max-width:720px){
+  input[type=text], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]), select, textarea{padding:10px 12px;}
+  .session-card .grid-row{gap:10px;}
+}
+@media (prefers-reduced-motion:reduce){
+  *, *::before, *::after{animation:none !important; transition:none !important;}
+}
+@media print{
+  .top-bar{position:static; backdrop-filter:none; box-shadow:none;}
+  #content > *{animation:none;}
+}
 </style>
 <title>總覽彙整 — 藝師藝有計畫 115學年度</title>
 </head>
@@ -1972,7 +2301,7 @@ function renderSchoolMiniCalendar(){
 
   const dowEl = $('#schoolCalDow');
   dowEl.innerHTML = '';
-  ['日','一','二','三','四','五','六'].forEach(d=>{
+  ['一','二','三','四','五','六','日'].forEach(d=>{
     const el = document.createElement('div');
     el.className = 'cal-dow';
     el.textContent = d;
@@ -1984,7 +2313,7 @@ function renderSchoolMiniCalendar(){
   sessions.forEach(s=>{ (byDate[s.date]=byDate[s.date]||[]).push(s); });
 
   const firstOfMonth = new Date(formCalYear, formCalMonth, 1);
-  const startWeekday = firstOfMonth.getDay();
+  const startWeekday = (firstOfMonth.getDay()+6)%7;   // 星期一開頭、星期日在最右邊
   const daysInMonthCount = new Date(formCalYear, formCalMonth+1, 0).getDate();
   const todayStr = todayDateKey();
 
@@ -2068,7 +2397,7 @@ function renderBottomCalendar(){
   const dowEl = $('#bottomCalDow');
   if(dowEl){
     dowEl.innerHTML = '';
-    ['日','一','二','三','四','五','六'].forEach(d=>{
+    ['一','二','三','四','五','六','日'].forEach(d=>{
       const el = document.createElement('div');
       el.className = 'cal-dow';
       el.textContent = d;
@@ -2081,7 +2410,7 @@ function renderBottomCalendar(){
   sessions.forEach(s=>{ (byDate[s.date]=byDate[s.date]||[]).push(s); });
 
   const firstOfMonth = new Date(bottomCalYear, bottomCalMonth, 1);
-  const startWeekday = firstOfMonth.getDay();
+  const startWeekday = (firstOfMonth.getDay()+6)%7;   // 星期一開頭、星期日在最右邊
   const daysInMonthCount = new Date(bottomCalYear, bottomCalMonth+1, 0).getDate();
   const todayStr = todayDateKey();
 
@@ -2174,7 +2503,7 @@ function renderSchoolYearView(){
 
     const dowRow = document.createElement('div');
     dowRow.className = 'micro-dow-grid';
-    ['日','一','二','三','四','五','六'].forEach(d=>{
+    ['一','二','三','四','五','六','日'].forEach(d=>{
       const el = document.createElement('div');
       el.className = 'micro-dow';
       el.textContent = d;
@@ -2184,7 +2513,7 @@ function renderSchoolYearView(){
 
     const cellGrid = document.createElement('div');
     cellGrid.className = 'micro-cell-grid';
-    const firstDay = new Date(fm.y, fm.m-1, 1).getDay();
+    const firstDay = (new Date(fm.y, fm.m-1, 1).getDay()+6)%7;   // 星期一開頭
     const totalDays = new Date(fm.y, fm.m, 0).getDate();
     const totalCells = Math.ceil((firstDay+totalDays)/7)*7;
     for(let i=0;i<totalCells;i++){
@@ -3605,7 +3934,7 @@ function renderAdminYearView(){
     body.className = 'mini-month-body';
     const dowRow = document.createElement('div');
     dowRow.className = 'micro-dow-grid';
-    ['日','一','二','三','四','五','六'].forEach(d=>{
+    ['一','二','三','四','五','六','日'].forEach(d=>{
       const el = document.createElement('div');
       el.className = 'micro-dow'; el.textContent = d;
       dowRow.appendChild(el);
@@ -3614,7 +3943,7 @@ function renderAdminYearView(){
 
     const cellGrid = document.createElement('div');
     cellGrid.className = 'micro-cell-grid';
-    const firstDay = new Date(fm.y, fm.m-1, 1).getDay();
+    const firstDay = (new Date(fm.y, fm.m-1, 1).getDay()+6)%7;   // 星期一開頭
     const totalDays = new Date(fm.y, fm.m, 0).getDate();
     const totalCells = Math.ceil((firstDay+totalDays)/7)*7;
     for(let i=0;i<totalCells;i++){
@@ -3661,7 +3990,7 @@ function renderCalendar(){
 
   const dowEl = $('#calDow');
   dowEl.innerHTML = '';
-  ['日','一','二','三','四','五','六'].forEach(d=>{
+  ['一','二','三','四','五','六','日'].forEach(d=>{
     const el = document.createElement('div');
     el.className = 'cal-dow';
     el.textContent = d;
@@ -3676,7 +4005,7 @@ function renderCalendar(){
   });
 
   const firstOfMonth = new Date(calYear, calMonth, 1);
-  const startWeekday = firstOfMonth.getDay();
+  const startWeekday = (firstOfMonth.getDay()+6)%7;   // 星期一開頭、星期日在最右邊
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
   const todayStr = todayDateKey();
 
