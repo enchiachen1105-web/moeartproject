@@ -683,6 +683,14 @@ input, select, textarea{min-width:0; max-width:100%;}
   .top-bar{position:static; backdrop-filter:none; box-shadow:none;}
   #content > *{animation:none;}
 }
+
+  /* 藝師藝有出差（計畫端行程） */
+  .day-chip.trip-chip{background:#2B2B33 !important; color:#fff !important;}
+  .micro-dot.trip-dot{background:#2B2B33 !important; border-radius:1px;}
+  .trip-tag{display:inline-block; background:#2B2B33; color:#fff; font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; margin-right:6px; vertical-align:1px;}
+  tbody tr.trip-row td{background:#F1F1F4;}
+  .ev-item.trip-item{background:#F4F4F7;}
+  .week-trip-count{display:inline-block; margin-left:8px; font-size:11.5px; font-weight:700; color:#fff; background:#2B2B33; border-radius:8px; padding:0 7px;}
 </style>
 <title>總覽彙整 — 藝師藝有計畫 115學年度</title>
 </head>
@@ -3252,7 +3260,8 @@ function renderLegend(){
     `<span class="legend-item"><span style="color:#F29CB9;">◆</span>第1次</span>` +
     `<span class="legend-item"><span style="color:#F08A24;">◆</span>第2次</span>` +
     `<span class="legend-item"><span style="color:#D6332A;">◆</span>第3次以上</span>` +
-    `<span class="legend-item" style="margin-left:6px;"><span style="display:inline-block;width:16px;border-top:3px solid #D9CFC2;"></span>新的一週</span>`;
+    `<span class="legend-item" style="margin-left:6px;"><span style="display:inline-block;width:16px;border-top:3px solid #D9CFC2;"></span>新的一週</span>` +
+    `<span class="legend-item" style="margin-left:6px;"><span class="trip-tag" style="margin:0;">✈ 藝師藝有出差</span></span>`;
 }
 
 /* ---------------- admin: change log ---------------- */
@@ -3536,12 +3545,21 @@ function renderListView(){
     events = events.filter(ev=>ev.date && ev.date.startsWith(activeAdminMonthFilter));
   }
   if(markOnly && markedSchools.length) events = events.filter(ev=>evMark(ev));
+  let listTrips = getVisibleTrips();
+  if(activeAdminMonthFilter !== 'all') listTrips = listTrips.filter(t=>t.date && t.date.startsWith(activeAdminMonthFilter));
   const tbody = $('#listTbody');
   tbody.innerHTML = '';
-  $('#listEmpty').style.display = events.length===0 ? 'block' : 'none';
+  $('#listEmpty').style.display = (events.length===0 && listTrips.length===0) ? 'block' : 'none';
   const visitNums = getVisitNumbers();
-  const weekCounts = {};
+  const weekCounts = {}, weekTrips = {};
   events.forEach(ev=>{ const k = weekStartKey(ev.date); weekCounts[k] = (weekCounts[k]||0)+1; });
+  listTrips.forEach(t=>{ const k = weekStartKey(t.date); weekTrips[k] = (weekTrips[k]||0)+1; });
+  events = events.concat(listTrips.map(t=>Object.assign({ isTrip:true }, t)));
+  events.sort((a,b)=>{
+    const da = a.date||'9999', db = b.date||'9999';
+    if(da!==db) return da<db?-1:1;
+    return ((a.isTrip?-1:0)-(b.isTrip?-1:0)) || (a.startTime||'').localeCompare(b.startTime||'') || (a.schoolName||'').localeCompare(b.schoolName||'','zh-Hant');
+  });
   let prev = null;
   events.forEach(ev=>{
     const catColor = CATEGORY_COLORS[ev.category] || 'var(--ink-faint)';
@@ -3557,8 +3575,27 @@ function renderListView(){
       hr.dataset.week = wk;
       if(collapsedWeeks.has(wk)) hr.classList.add('week-collapsed');
       hr.title = '點一下收合／展開這一週';
-      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]} 場</span>${markedSchools.map(id=>{ const n = events.filter(e=>markMatches(id, e) && weekStartKey(e.date)===wk).length; const m = markColorOf(id); return n ? `<span class="week-mark-count" style="--mk:${m.c};">★${n}</span>` : ''; }).join('')}<span class="week-hidden-note">（已收合）</span></td>`;
+      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]||0} 場</span>${weekTrips[wk]?`<span class="week-trip-count">✈ 出差 ${weekTrips[wk]}</span>`:''}${markedSchools.map(id=>{ const n = events.filter(e=>markMatches(id, e) && weekStartKey(e.date)===wk).length; const m = markColorOf(id); return n ? `<span class="week-mark-count" style="--mk:${m.c};">★${n}</span>` : ''; }).join('')}<span class="week-hidden-note">（已收合）</span></td>`;
       tbody.appendChild(hr);
+    }
+    if(ev.isTrip){
+      const trr = document.createElement('tr');
+      trr.className = 'trip-row';
+      trr.innerHTML = `
+      <td data-label="日期">${fmtDateDisplay(ev.date)}</td>
+      <td data-label="時間">${tripTimeText(ev)}</td>
+      <td data-label="學校"><span class="trip-tag">✈ ${TRIP_LABEL}</span><strong>${escapeHtml(ev.title||'')}</strong></td>
+      <td data-label="學期"></td>
+      <td data-label="隨課老師"></td>
+      <td data-label="人員">${escapeHtml(ev.people||'')}</td>
+      <td data-label="備註">${escapeHtml(ev.note||'')}</td>
+      <td data-label="地點">${escapeHtml(ev.location||'')}</td>
+      <td data-label="訪視標記"></td>`;
+      trr.dataset.week = wk;
+      if(collapsedWeeks.has(wk)) trr.classList.add('week-row-hidden');
+      tbody.appendChild(trr);
+      prev = ev;
+      return;
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -3910,10 +3947,46 @@ $('#calNext')&&$('#calNext').addEventListener('click', ()=>{
   renderMonthList();
 });
 
+/* ---------------- 計畫端行程：藝師藝有出差（資料表 plan_trips，只在總覽頁顯示） ---------------- */
+const TRIP_LABEL = '藝師藝有出差';
+function tripSemester(d){ if(!d) return ''; const m = Number(d.slice(5,7)); return (m>=8 || m===1) ? '上學期' : '下學期'; }
+function getVisibleTrips(){
+  if(SCHOOL_ID) return [];
+  const sn = $('#schoolNameFilter'), cat = $('#categoryFilter'), sem = $('#semesterFilter');
+  if(sn && sn.value) return [];
+  if(cat && cat.value) return [];
+  if(markOnly && markedSchools.length) return [];
+  return (DATA.trips||[]).filter(t=>{
+    if(sem && sem.value && normalizeSemester(tripSemester(t.date)) !== sem.value) return false;
+    return true;
+  });
+}
+function tripTimeText(t){ return (t.startTime||t.endTime) ? `${t.startTime||''}~${t.endTime||''}` : '全天'; }
+function tripChipHTML(t){
+  const tip = `${TRIP_LABEL}｜${t.title||''}${t.location?'｜'+t.location:''}${t.people?'｜'+t.people:''}${t.note?'｜'+t.note:''}`;
+  return `<div class="day-chip-wrap"><div class="day-chip trip-chip" title="${escapeHtml(tip)}"><span class="day-chip-name">✈ ${escapeHtml(t.title||TRIP_LABEL)}</span></div>`+
+    `<div class="chip-people">${escapeHtml([t.startTime?tripTimeText(t):'', t.people||''].filter(Boolean).join(' '))}</div></div>`;
+}
+function tripItemHTML(t){
+  return `<div class="ev-item trip-item">
+      <div class="ev-time">${fmtDateDisplay(t.date)}<br>${tripTimeText(t)}</div>
+      <div class="ev-main">
+        <span class="trip-tag">✈ ${TRIP_LABEL}</span><span class="sname">${escapeHtml(t.title||'')}</span>
+        <div class="meta" style="margin-top:2px;">
+          ${t.location?`<span style="color:var(--ink-soft);">地點：</span>${escapeHtml(t.location)}`:''}
+          ${t.people?`<span style="margin:0 4px;color:var(--ink-faint);">｜</span><span style="color:var(--ink-soft);">人員：</span>${escapeHtml(t.people)}`:''}
+        </div>
+        ${t.note?`<div class="meta" style="margin-top:2px;"><span style="color:var(--ink-soft);">備註：</span>${escapeHtml(t.note)}</div>`:''}
+      </div>
+    </div>`;
+}
+
 function renderAdminYearView(){
   const allEvents = getFilteredEventsFixed();
   const byDate = {};
   allEvents.forEach(ev=>{ if(ev.date)(byDate[ev.date]=byDate[ev.date]||[]).push(ev); });
+  const tripsByDate = {};
+  getVisibleTrips().forEach(t=>{ if(t.date)(tripsByDate[t.date]=tripsByDate[t.date]||[]).push(t); });
 
   const container = $('#adminCalYearGrid');
   container.innerHTML = '';
@@ -3952,10 +4025,11 @@ function renderAdminYearView(){
       const inMonth = dayNum>=1 && dayNum<=totalDays;
       const dateKey = inMonth ? `${fm.y}-${String(fm.m).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}` : '';
       const dayEvs = inMonth ? (byDate[dateKey]||[]) : [];
-      cell.className = 'micro-cell' + (inMonth?'':' out') + (dayEvs.length?' has-event':'');
+      const dayTrips = inMonth ? (tripsByDate[dateKey]||[]) : [];
+      cell.className = 'micro-cell' + (inMonth?'':' out') + ((dayEvs.length||dayTrips.length)?' has-event':'');
       let dotsHtml = '';
-      if(dayEvs.length){
-        dotsHtml = `<div class="dot-row">${dayEvs.map(ev=>{
+      if(dayEvs.length || dayTrips.length){
+        dotsHtml = `<div class="dot-row">${dayTrips.map(()=>`<span class="micro-dot trip-dot" title="${TRIP_LABEL}"></span>`).join('')}${dayEvs.map(ev=>{
           const c = schoolColor(ev.schoolName, ev.category).bg;
           return `<span class="micro-dot" style="background:${c}; box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);"></span>`;
         }).join('')}</div>`;
@@ -4003,6 +4077,8 @@ function renderCalendar(){
     if(!ev.date) return;
     (byDate[ev.date] = byDate[ev.date]||[]).push(ev);
   });
+  const tripsByDate = {};
+  getVisibleTrips().forEach(t=>{ if(t.date)(tripsByDate[t.date]=tripsByDate[t.date]||[]).push(t); });
 
   const firstOfMonth = new Date(calYear, calMonth, 1);
   const startWeekday = (firstOfMonth.getDay()+6)%7;   // 星期一開頭、星期日在最右邊
@@ -4021,7 +4097,7 @@ function renderCalendar(){
     const dateKey = inMonth ? toDateKey(calYear, calMonth+1, dayNum) : '';
     cell.className = 'cal-cell' + (inMonth?'':' out') + (dateKey && dateKey===todayStr?' today':'') + (dateKey && dateKey===selectedDayKey?' selected':'');
     const dayEvents = (byDate[dateKey]||[]).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
-    let chipsHtml = '';
+    let chipsHtml = (tripsByDate[dateKey]||[]).map(tripChipHTML).join('');
     dayEvents.forEach(ev=>{
       const sc = schoolColor(ev.schoolName, ev.category);
       chipsHtml += `<div class="day-chip-wrap">`+
@@ -4064,18 +4140,23 @@ function renderMonthList(){
     : `${calYear} 年 ${calMonth+1} 月`;
   const vf = VISIT_FLAGS.find(f=>f.field===activeVisitFilter);
   const filterLabel = vf ? `・僅${vf.label}` : '';
-  titleEl.innerHTML = `${scopeLabel}${filterLabel}（共 ${events.length} 場）`;
+  let monthTrips = getVisibleTrips().filter(t=>t.date && t.date.startsWith(monthPrefix));
+  if(selectedDayKey) monthTrips = monthTrips.filter(t=>t.date===selectedDayKey);
+  titleEl.innerHTML = `${scopeLabel}${filterLabel}（共 ${events.length} 場${monthTrips.length?`、${TRIP_LABEL} ${monthTrips.length} 筆`:''}）`;
 
   const clearBtn = $('#clearDaySelectBtn');
   if(clearBtn) clearBtn.addEventListener('click', (e)=>{ e.stopPropagation(); selectedDayKey=null; renderCalendar(); });
 
-  if(events.length===0){
+  if(events.length===0 && monthTrips.length===0){
     bodyEl.innerHTML = `<p style="color:var(--ink-faint);font-size:13px;margin:8px 0 0;">沒有符合條件的課程場次。</p>`;
     return;
   }
 
   const visitNums = getVisitNumbers();
-  bodyEl.innerHTML = events.map(ev=>{
+  const merged = events.concat(monthTrips.map(t=>Object.assign({ isTrip:true }, t)));
+  merged.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.isTrip?-1:0)-(b.isTrip?-1:0) || (a.startTime||'').localeCompare(b.startTime||''));
+  bodyEl.innerHTML = merged.map(ev=>{
+    if(ev.isTrip) return tripItemHTML(ev);
     const catColor = schoolColor(ev.schoolName, ev.category).fg;
     const flags = VISIT_FLAGS.filter(f=>ev[f.field]);
     const order = getVisitOrderInfo(ev);
@@ -4287,12 +4368,17 @@ async function exportItineraryXlsx(){
     const timeOf = ev => (ev.startTime||ev.endTime) ? `${ev.startTime||''}-${ev.endTime||''}` : '';
 
     // 1) 訪視行程：有任何訪視標記的場次
-    const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee);
+    const tripRows = (DATA.trips||[]).map(t=>Object.assign({ isTrip:true }, t));
+    const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee)
+      .concat(tripRows).sort(itinerarySort);
+    const tripTime = t => (t.startTime||t.endTime) ? `${t.startTime||''}-${t.endTime||''}` : '全天';
     addSheet('訪視行程', [
       ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['類別',8,'center'],['學校',24],['課程大綱',26],['完整上課內容',50,'left','hidden'],
       ['授課藝師',14],['上課地點',18],['訪視狀態',10,'center'],['助理訪視',11,'center'],['訪視委員',14],['第幾次訪視',10,'center'],
       ['承辦人員',12],['聯絡電話',18]
     ], visits, ev=>{
+      if(ev.isTrip) return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', tripTime(ev), TRIP_LABEL, ev.title||'', ev.note||'', ev.note||'',
+        '', ev.location||'', '', ev.people||'', '', '', '', ''];
       const c = itineraryContact(ev);
       const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':''].filter(Boolean).join('、');
       const committee = ev.visitCommittee ? (ev.visitCommitteeName || '委員') : '';
@@ -4306,7 +4392,9 @@ async function exportItineraryXlsx(){
     addSheet('全部課程行程', [
       ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['時數',6,'center'],['類別',8,'center'],['學校',24],['課程大綱',26],['完整上課內容',50,'left','hidden'],
       ['授課藝師',14],['隨課老師',14],['上課地點',18],['訪視標記',16],['承辦人員',12],['聯絡電話',18]
-    ], all, ev=>{
+    ], all.concat(tripRows).sort(itinerarySort), ev=>{
+      if(ev.isTrip) return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', tripTime(ev), '', TRIP_LABEL, ev.title||'', ev.note||'', ev.note||'',
+        ev.people||'', '', ev.location||'', '', '', ''];
       const c = itineraryContact(ev);
       return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.hours||'', ev.category, ev.schoolName, courseOutline(ev.content), ev.content||'',
         ev.instructor||'', ev.companionTeacher||'', ev.location||'', visitMarksText(ev), c.teacher, c.phone];
@@ -4319,7 +4407,7 @@ async function exportItineraryXlsx(){
     a.download = `藝師藝有_行程表_${todayDateKey()}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
-    showToast(`✓ 已匯出行程表：訪視 ${visits.length} 筆、全部課程 ${all.length} 筆`);
+    showToast(`✓ 已匯出行程表：訪視＋出差 ${visits.length} 筆、全部課程 ${all.length} 筆`);
   }catch(err){
     console.error(err);
     showToast('Excel 匯出失敗（可能是網路問題），請稍後再試');
@@ -4410,6 +4498,11 @@ async function loadData(){
         hadVisitConflict:r.had_visit_conflict, visitFlagsAtChange:r.visit_flags_at_change
       }));
     }catch(e){ console.error('changeLog load error', e); DATA.changeLog = []; }
+    try{
+      const trips = await sbFetch('/plan_trips?select=*&order=date.asc,start_time.asc');
+      DATA.trips = (trips||[]).map(r=>({ id:r.id, date:r.date, startTime:r.start_time||'', endTime:r.end_time||'',
+        title:r.title||'', location:r.location||'', people:r.people||'', note:r.note||'' }));
+    }catch(e){ DATA.trips = []; }   // 還沒建 plan_trips 表時不影響其他功能
   }
 }
 
@@ -4469,7 +4562,7 @@ async function saveData(){
 let _adminLoadedAt = Date.now();
 let _adminReloading = false;
 let _adminDataSig = '';
-function adminDataSig(){ return JSON.stringify([DATA.schools, DATA.changeLog]); }
+function adminDataSig(){ return JSON.stringify([DATA.schools, DATA.changeLog, DATA.trips]); }
 async function reloadAdminData(manual){
   if(_adminReloading) return;
   _adminReloading = true;
