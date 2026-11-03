@@ -2911,6 +2911,7 @@ async function _commitSaveSchoolInner(school){
       visitSuyu: !!existing.visitSuyu,
       visitEnjia: !!existing.visitEnjia,
       visitCommittee: !!existing.visitCommittee,
+      visitPhoto: !!existing.visitPhoto,
       locked: true
     };
   }).filter(s=>{
@@ -2977,7 +2978,8 @@ function getAllEvents(){
         visitSuyu: !!sess.visitSuyu,
         visitEnjia: !!sess.visitEnjia,
         visitCommittee: !!sess.visitCommittee,
-        visitCommitteeName: sess.visitCommitteeName || ''
+        visitCommitteeName: sess.visitCommitteeName || '',
+        visitPhoto: !!sess.visitPhoto
       });
     });
   });
@@ -3161,7 +3163,7 @@ function logSessionChange(schoolId, sessionId, reason, isDeleted, afterValues){
     hadVisitConflict,
     visitFlagsAtChange: {
       visitPlanned: !!before.visitPlanned, visitConfirmed: !!before.visitConfirmed,
-      visitSuyu: !!before.visitSuyu, visitEnjia: !!before.visitEnjia, visitCommittee: !!before.visitCommittee
+      visitSuyu: !!before.visitSuyu, visitEnjia: !!before.visitEnjia, visitCommittee: !!before.visitCommittee, visitPhoto: !!before.visitPhoto
     }
   });
   if(DATA.changeLog.length > 200) DATA.changeLog.length = 200;
@@ -3234,7 +3236,8 @@ const VISIT_FLAGS = [
   {field:'visitConfirmed', label:'訪視確定', color:'#1CA3B8'},
   {field:'visitSuyu',      label:'素瑜',     color:'#2E8B6B'},
   {field:'visitEnjia',     label:'恩嘉',     color:'#9B59B6'},
-  {field:'visitCommittee', label:'委員',     color:'#5654A2'}
+  {field:'visitCommittee', label:'委員',     color:'#5654A2'},
+  {field:'visitPhoto',     label:'攝影',     color:'#D9622B'}
 ];
 
 // Taiwan academic-year grouping: 上學期 runs 8/1–次年1/31 (includes 暑假),
@@ -3310,6 +3313,7 @@ function chipPeopleHTML(ev){
   if(ev.visitSuyu) who.push('素瑜');
   if(ev.visitEnjia) who.push('恩嘉');
   if(ev.visitCommittee) who.push(ev.visitCommitteeName ? `委員 ${ev.visitCommitteeName}` : '委員');
+  if(ev.visitPhoto) who.push('📷攝影');
   return who.length ? `<div class="chip-people">${escapeHtml(who.join('・'))}</div>` : '';
 }
 function chipTooltip(ev, visitNums){
@@ -3761,7 +3765,7 @@ function contentCellHTML(content){
 // including rows re-rendered later, since it's bound to the table body itself.
 const VISIT_DB_COLUMN = {
   visitPlanned:'visit_planned', visitConfirmed:'visit_confirmed', visitSuyu:'visit_suyu',
-  visitEnjia:'visit_enjia', visitCommittee:'visit_committee'
+  visitEnjia:'visit_enjia', visitCommittee:'visit_committee', visitPhoto:'visit_photo'
 };
 
 function findSessionByDataset(t){
@@ -4463,18 +4467,18 @@ async function exportItineraryXlsx(){
 
     // 1) 訪視行程：有任何訪視標記的場次
     const tripRows = (DATA.trips||[]).map(t=>Object.assign({ isTrip:true }, t));
-    const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee)
+    const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee||ev.visitPhoto)
       .concat(tripRows).sort(itinerarySort);
     const tripTime = t => (t.startTime||t.endTime) ? `${t.startTime||''}-${t.endTime||''}` : '全天';
     addSheet('訪視行程', [
       ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['類別',8,'center'],['學校',24],['課程大綱',26],['完整上課內容',50,'left','hidden'],
-      ['授課藝師',14],['上課地點',18],['訪視狀態',10,'center'],['助理訪視',11,'center'],['訪視委員',14],['第幾次訪視',10,'center'],
+      ['授課藝師',14],['上課地點',18],['訪視狀態',10,'center'],['助理／攝影',14,'center'],['訪視委員',14],['第幾次訪視',10,'center'],
       ['承辦人員',12],['聯絡電話',18]
     ], visits, ev=>{
       if(ev.isTrip) return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', tripTime(ev), TRIP_LABEL, ev.title||'', ev.note||'', ev.note||'',
         '', ev.location||'', '', ev.people||'', '', '', '', ''];
       const c = itineraryContact(ev);
-      const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':''].filter(Boolean).join('、');
+      const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':'', ev.visitPhoto?'攝影團隊':''].filter(Boolean).join('、');
       const committee = ev.visitCommittee ? (ev.visitCommitteeName || '委員') : '';
       const n = ev.visitConfirmed ? visitNums[ev.sessionId] : '';
       return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.category, ev.schoolName, courseOutline(ev.content), ev.content||'',
@@ -4550,7 +4554,7 @@ function dbRowToSession(r){
     studentGrades: r.student_grades||[], location: r.location||'', content: r.content||'',
     visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
     visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
-    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', locked: r.locked||false,
+    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', visitPhoto: r.visit_photo||false, locked: r.locked||false,
     countedHours: (r.counted_hours===null || r.counted_hours===undefined) ? null : Number(r.counted_hours),
     checkNote: r.check_note || ''
   };
