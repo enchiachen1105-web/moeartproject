@@ -691,6 +691,42 @@ input, select, textarea{min-width:0; max-width:100%;}
   tbody tr.trip-row td{background:#F1F1F4;}
   .ev-item.trip-item{background:#F4F4F7;}
   .week-trip-count{display:inline-block; margin-left:8px; font-size:11.5px; font-weight:700; color:#fff; background:#2B2B33; border-radius:8px; padding:0 7px;}
+
+  /* ---------- 總覽清單：精簡版排版（6 欄） ---------- */
+  table.list-table{table-layout:fixed; width:100%;}
+  table.list-table col.c-when{width:118px;} table.list-table col.c-school{width:22%;}
+  table.list-table col.c-people{width:15%;} table.list-table col.c-course{width:auto;}
+  table.list-table col.c-place{width:13%;} table.list-table col.c-visit{width:168px;}
+  table.list-table tbody td{padding:14px 12px; vertical-align:top; line-height:1.5; overflow-wrap:anywhere;}
+  .lt-date{font-weight:700; color:var(--ink); white-space:nowrap; font-size:13.5px;}
+  .lt-dow{font-weight:500; color:var(--ink-faint); margin-left:2px;}
+  .lt-time{margin-top:3px; font-size:12.5px; color:var(--ink-soft); white-space:nowrap; font-variant-numeric:tabular-nums;}
+  .lt-school .school-link{white-space:normal; display:inline; line-height:1.9; -webkit-box-decoration-break:clone; box-decoration-break:clone;}
+  .lt-sem{display:block; margin-top:4px; font-size:11.5px; color:var(--ink-faint);}
+  .lt-person{font-size:13px; color:var(--ink);}
+  .lt-person + .lt-person{margin-top:4px;}
+  .lt-person .lt-k{display:inline-block; font-size:10.5px; font-weight:700; color:var(--ink-faint); background:#F2F2F5; border-radius:4px; padding:0 5px; margin-right:5px; vertical-align:1px;}
+  .lt-person .lt-empty{color:#C4C5CC;}
+  .lt-outline{font-weight:700; color:var(--ink); font-size:13.5px;}
+  .lt-full{margin-top:3px; font-size:12.5px; color:var(--ink-soft); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; cursor:pointer;}
+  .lt-full.open{display:block; -webkit-line-clamp:unset; overflow:visible;}
+  .lt-full:hover{color:var(--ink);}
+  .lt-more{font-size:11.5px; color:var(--accent); font-weight:600; cursor:pointer; margin-top:2px; display:inline-block;}
+  .lt-place{font-size:13px; color:var(--ink-soft);}
+  table.list-table .visit-check-group{display:grid; grid-template-columns:auto auto; gap:6px 10px; justify-content:start;}
+  table.list-table .visit-check-group{row-gap:2px;}
+  table.list-table .visit-check-item{font-size:12px; padding:2px 0 !important; margin:0 !important; min-height:0 !important; line-height:1.35;}
+  table.list-table .committee-name-input{grid-column:1 / -1; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px;}
+  @media (max-width:720px){
+    table.list-table col{width:auto !important;}
+    .lt-full{-webkit-line-clamp:4;}
+    table.list-table .visit-check-group{grid-template-columns:repeat(3, auto);}
+    table.list-table tbody tr:not(.week-header-row) td{display:block; position:relative; padding:5px 0 5px 64px !important; min-height:22px;}
+    table.list-table tbody tr:not(.week-header-row) td::before{position:absolute; left:0; top:7px; width:58px; font-size:11px;}
+    table.list-table .lt-time{display:inline; margin-left:8px;}
+    table.list-table .lt-sem{display:inline; margin-left:6px;}
+    table.list-table .lt-school .school-link{white-space:normal;}
+  }
 </style>
 <title>課程期程表填寫 — 藝師藝有計畫 115學年度</title>
 </head>
@@ -3621,21 +3657,18 @@ function renderListView(){
       hr.dataset.week = wk;
       if(collapsedWeeks.has(wk)) hr.classList.add('week-collapsed');
       hr.title = '點一下收合／展開這一週';
-      hr.innerHTML = `<td colspan="9"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]||0} 場</span>${weekTrips[wk]?`<span class="week-trip-count">✈ 出差 ${weekTrips[wk]}</span>`:''}${markedSchools.map(id=>{ const n = events.filter(e=>markMatches(id, e) && weekStartKey(e.date)===wk).length; const m = markColorOf(id); return n ? `<span class="week-mark-count" style="--mk:${m.c};">★${n}</span>` : ''; }).join('')}<span class="week-hidden-note">（已收合）</span></td>`;
+      hr.innerHTML = `<td colspan="6"><span class="week-toggle"></span>${weekRangeLabel(wk)}<span class="week-count">本週共 ${weekCounts[wk]||0} 場</span>${weekTrips[wk]?`<span class="week-trip-count">✈ 出差 ${weekTrips[wk]}</span>`:''}${markedSchools.map(id=>{ const n = events.filter(e=>markMatches(id, e) && weekStartKey(e.date)===wk).length; const m = markColorOf(id); return n ? `<span class="week-mark-count" style="--mk:${m.c};">★${n}</span>` : ''; }).join('')}<span class="week-hidden-note">（已收合）</span></td>`;
       tbody.appendChild(hr);
     }
     if(ev.isTrip){
       const trr = document.createElement('tr');
       trr.className = 'trip-row';
       trr.innerHTML = `
-      <td data-label="日期">${fmtDateDisplay(ev.date)}</td>
-      <td data-label="時間">${tripTimeText(ev)}</td>
-      <td data-label="學校"><span class="trip-tag">✈ ${TRIP_LABEL}</span><strong>${escapeHtml(ev.title||'')}</strong></td>
-      <td data-label="學期"></td>
-      <td data-label="隨課老師"></td>
-      <td data-label="人員">${escapeHtml(ev.people||'')}</td>
-      <td data-label="備註">${escapeHtml(ev.note||'')}</td>
-      <td data-label="地點">${escapeHtml(ev.location||'')}</td>
+      <td data-label="日期／時間"><div class="lt-date">${ltDate(ev.date)}</div><div class="lt-time">${tripTimeText(ev)}</div></td>
+      <td data-label="行程"><span class="trip-tag">✈ ${TRIP_LABEL}</span></td>
+      <td data-label="人員">${ev.people?`<div class="lt-person">${escapeHtml(ev.people)}</div>`:''}</td>
+      <td data-label="內容"><div class="lt-outline">${escapeHtml(ev.title||'')}</div>${ev.note?`<div class="lt-full open">${escapeHtml(ev.note)}</div>`:''}</td>
+      <td data-label="地點"><div class="lt-place">${escapeHtml(ev.location||'')}</div></td>
       <td data-label="訪視標記"></td>`;
       trr.dataset.week = wk;
       if(collapsedWeeks.has(wk)) trr.classList.add('week-row-hidden');
@@ -3644,15 +3677,13 @@ function renderListView(){
       return;
     }
     const tr = document.createElement('tr');
+    const sc = schoolColor(ev.schoolName, ev.category);
     tr.innerHTML = `
-      <td data-label="日期">${evMark(ev) ? '<span class="mark-star">★</span>' : ''}${fmtDateDisplay(ev.date)}${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
-      <td data-label="時間">${ev.startTime||'–'} ~ ${ev.endTime||'–'}</td>
-      <td data-label="學校">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${schoolColor(ev.schoolName, ev.category).bg};color:${schoolColor(ev.schoolName, ev.category).fg};" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)} ↗</a></td>
-      <td data-label="學期">${escapeHtml(ev.semester||'')}</td>
-      <td data-label="隨課老師">${escapeHtml(ev.companionTeacher||'（未填）')}</td>
-      <td data-label="授課藝師">${escapeHtml(ev.instructor||'')}</td>
-      <td data-label="授課內容">${contentCellHTML(ev.content)}</td>
-      <td data-label="地點">${escapeHtml(ev.location||'')}</td>
+      <td data-label="日期／時間">${evMark(ev) ? '<span class="mark-star">★</span>' : ''}<span class="lt-date">${ltDate(ev.date)}</span><div class="lt-time">${(ev.startTime||ev.endTime) ? `${ev.startTime||'–'}–${ev.endTime||'–'}` : '時間未填'}</div>${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
+      <td data-label="學校" class="lt-school">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${sc.bg};color:${sc.fg};" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)}&nbsp;↗</a><span class="lt-sem">${escapeHtml(normalizeSemester(ev.semester)||ev.semester||'')}</span></td>
+      <td data-label="藝師／隨課"><div class="lt-person"><span class="lt-k">藝師</span>${ev.instructor?escapeHtml(ev.instructor):'<span class="lt-empty">未填</span>'}</div><div class="lt-person"><span class="lt-k">隨課</span>${ev.companionTeacher?escapeHtml(ev.companionTeacher):'<span class="lt-empty">未填</span>'}</div></td>
+      <td data-label="課程">${courseCellHTML(ev.content)}</td>
+      <td data-label="地點"><div class="lt-place">${escapeHtml(ev.location||'')}</div></td>
       <td data-label="訪視標記">${visitCheckboxesHTML(ev)}</td>
     `;
     tr.dataset.week = wk;
@@ -3706,6 +3737,18 @@ function visitMarksText(ev){
 // table stays scannable; clicking expands that one cell in place (no modal —
 // modals would be overkill for a single text field, and hovering for the
 // full text isn't discoverable on touch devices).
+function ltDate(d){
+  if(!d) return '未填日期';
+  const [y,m,dd] = d.split('-');
+  return `${Number(m)}/${Number(dd)}<span class="lt-dow">（${weekdayZh(d)}）</span>`;
+}
+function courseCellHTML(content){
+  if(!content) return '<span class="lt-empty" style="color:#C4C5CC;">未填</span>';
+  const outline = courseOutline(content);
+  const full = content.replace(/\s+/g,' ').trim();
+  const showFull = full.replace(/[｜|]/g,'').replace(/\s/g,'') !== outline.replace(/…$/,'').replace(/[：:｜|]/g,'').replace(/\s/g,'');
+  return `<div class="lt-outline">${escapeHtml(outline)}</div>` + (showFull ? `<div class="lt-full" title="點一下看完整內容">${escapeHtml(full)}</div>` : '');
+}
 function contentCellHTML(content){
   if(!content) return '';
   const safe = escapeHtml(content);
@@ -3824,6 +3867,11 @@ $('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
   });
 });
 
+// 課程欄：點一下展開／收合完整內容
+$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+  const full = e.target.closest('.lt-full');
+  if(full) full.classList.toggle('open');
+});
 // Click-to-expand for truncated 授課內容 cells in the list view.
 $('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
   const cell = e.target.closest('.content-cell.truncated');
