@@ -772,11 +772,22 @@ input, select, textarea{min-width:0; max-width:100%;}
   .pp-schools{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px;}
   .pp-school{border:1.5px solid #F3D5BF; background:#fff; border-radius:10px; padding:8px 10px; cursor:pointer; transition:box-shadow .15s;}
   .pp-school:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);}
-  .pp-school.full{border-color:#9ED3B0; background:#F2FAF5;}
+  .pp-school{position:relative;}
+  .pp-school.s-picked{border-color:#5B8DEF; background:#F3F7FF;}
+  .pp-school.s-picked .pp-name{color:#2F5FC4;}
+  .pp-school.s-confirmed{border-color:#2F9E5E; border-width:2px; background:#fff;}
+  .pp-school.s-confirmed .pp-name{color:#1E8A4C;}
+  .pp-school.s-shot{border-color:#2F9E5E; background:#2F9E5E;}
+  .pp-school.s-shot .pp-name, .pp-school.s-shot .pp-nums, .pp-school.s-shot .pp-nums b, .pp-school.s-shot .pp-video{color:#fff !important;}
+  .pp-check{position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:#1E8A4C; color:#fff; font-weight:900; font-size:14px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2.5px #fff, 0 2px 6px rgba(0,0,0,.2);}
+  .pp-school.s-shot .pp-check{background:#FFC93C; color:#5A3E00;}
+  .pp-check.sm{position:static; display:inline-flex; width:16px; height:16px; font-size:10px; box-shadow:none; vertical-align:-3px; margin-right:3px;}
+  .pp-legend{margin-top:12px; font-size:12px; color:var(--ink-soft); display:flex; flex-wrap:wrap; align-items:center; gap:2px 6px;}
+  .pp-legend .lg{display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:3px; box-sizing:border-box;}
+  .lg-picked{border:2px solid #5B8DEF; background:#F3F7FF;} .lg-confirmed{border:2px solid #2F9E5E; background:#fff;} .lg-shot{background:#2F9E5E;}
   .pp-school.active{outline:2.5px solid #B4561F; outline-offset:1px;}
   .pp-school.pp-highlight{cursor:default; border-style:dashed; background:#FFFDF6;}
   .pp-name{font-weight:800; font-size:13.5px; color:var(--ink);}
-  .pp-school.full .pp-name{color:#1E8A4C;}
   .pp-nums{font-size:12px; color:var(--ink-soft); margin:2px 0 4px;}
   .pp-nums b{color:var(--ink);}
   .pp-video{display:inline-flex; align-items:center; gap:4px; font-size:11.5px; color:#9A9BA3; font-weight:600; margin:0 !important; padding:0 !important; cursor:pointer;}
@@ -3079,15 +3090,19 @@ function renderPhotoPanel(){
     const full = picked >= PHOTO_PER_SCHOOL;
     const vchk = PHOTO_MODE ? (sc.videoDone ? '<span class="pp-video on">🎬 影片完成</span>' : '<span class="pp-video">🎬 影片未完成</span>')
       : `<label class="pp-video ${sc.videoDone?'on':''}"><input type="checkbox" class="pp-video-chk" data-school-id="${id}" ${sc.videoDone?'checked':''}>🎬 影片完成</label>`;
-    html += `<div class="pp-school ${full?'full':''} ${curSchool===sc.name?'active':''}" data-name="${escapeHtml(sc.name)}">
-      <div class="pp-name">${escapeHtml(PHOTO_SHORT[id]||sc.name)}${full?' ✓':''}</div>
+    // 階段：已選滿 2 堂＝藍框 → 確定 2 堂＝綠框 → 拍攝完成 2 堂＝整張綠底；影片完成＝右上角打勾
+    const stage = d >= PHOTO_PER_SCHOOL ? 's-shot' : c.length >= PHOTO_PER_SCHOOL ? 's-confirmed' : full ? 's-picked' : '';
+    html += `<div class="pp-school ${stage} ${sc.videoDone?'s-video':''} ${curSchool===sc.name?'active':''}" data-name="${escapeHtml(sc.name)}">
+      ${sc.videoDone?'<span class="pp-check" title="影片完成">✓</span>':''}
+      <div class="pp-name">${escapeHtml(PHOTO_SHORT[id]||sc.name)}</div>
       <div class="pp-nums">已選 <b>${picked}/${PHOTO_PER_SCHOOL}</b>・確定 <b>${c.length}</b>・完成 <b>${d}</b></div>${vchk}</div>`;
   });
-  html += `<div class="pp-school pp-highlight">
+  html += `<div class="pp-school pp-highlight ${DATA.highlightDone?'s-video':''}">${DATA.highlightDone?'<span class="pp-check" title="影片完成">✓</span>':''}
       <div class="pp-name">✨ 全計畫精華</div><div class="pp-nums">第 11 支影片</div>
       ${PHOTO_MODE ? (DATA.highlightDone?'<span class="pp-video on">🎬 影片完成</span>':'<span class="pp-video">🎬 影片未完成</span>')
         : `<label class="pp-video ${DATA.highlightDone?'on':''}"><input type="checkbox" class="pp-highlight-chk" ${DATA.highlightDone?'checked':''}>🎬 影片完成</label>`}</div>`;
   html += `</div>`;
+  html += `<div class="pp-legend"><span class="lg lg-picked"></span>已選好 2 堂　<span class="lg lg-confirmed"></span>攝影團隊確定 2 堂　<span class="lg lg-shot"></span>2 堂都拍攝完成　<span class="pp-check sm">✓</span>影片完成</div>`;
   if(PHOTO_MODE || photoSchoolsOnly){
     const nHidden = getAllEvents().filter(ev=>matchesBaseFilter(ev) && photoHidden(ev)).length;
     html += `<div class="pp-foot">${PHOTO_MODE?'':'📷 拍攝 10 校篩選中：'}一間學校已排定 2 場（計畫端勾「攝影」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏${PHOTO_MODE?'；已經過去的日期也會隱藏':''}。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
