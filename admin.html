@@ -3723,11 +3723,8 @@ function renderCategoryFilterRow(){
     return true;
   });
   const fullIds = PHOTO_SCHOOL_IDS.filter(id=>photoPickedCount(id) >= PHOTO_PER_SCHOOL);
-  const nPhoto = base.filter(ev=>isPhotoSchool(ev.schoolId) && (!cur || ev.category===cur) && (showFullPhotoSchools || !fullIds.includes(ev.schoolId))).length;
-  let photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（已選滿 2 場「攝影」的學校會先隱藏）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
-  if(!PHOTO_MODE && photoSchoolsOnly && fullIds.length){
-    photoBtn += `<button type="button" class="cat-filter-btn photo-full-btn${showFullPhotoSchools?' active':''}" title="${escapeHtml(fullIds.map(id=>PHOTO_SHORT[id]).join('、'))}">${showFullPhotoSchools?'✓ ':''}含已選滿的 ${fullIds.length} 校（只列選好的 2 堂）</button>`;
-  }
+  const nPhoto = base.filter(ev=>isPhotoSchool(ev.schoolId) && (!cur || ev.category===cur) && (!fullIds.includes(ev.schoolId) || isPhotoPicked(ev) || ev.photoStatus==='confirmed')).length;
+  let photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（已選滿 2 場「攝影」的學校只列選好的 2 場）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
   let html = `<span class="vf-label">類別篩選：</span>` +
     `<button type="button" class="cat-filter-btn${cur===''?' active':''}" data-cat="">全部<span class="vf-count">${base.length}</span></button>`;
   Object.keys(CATEGORY_COLORS).forEach(cat=>{
@@ -3836,7 +3833,6 @@ function matchesBaseFilter(ev){
   const category = $('#categoryFilter').value;
   if(category && ev.category !== category) return false;
   if(photoSchoolsOnly && !isPhotoSchool(ev.schoolId)) return false;
-  if(photoSchoolsOnly && !showFullPhotoSchools && photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL) return false;   // 已選滿 2 場的學校先藏起來
   const semester = $('#semesterFilter').value;
   if(semester && normalizeSemester(ev.semester) !== semester) return false;
   return true;
