@@ -3070,7 +3070,7 @@ function renderPhotoPanel(){
   html += `<div class="pp-legend"><span class="lg lg-picked"></span>已選好 2 堂　<span class="lg lg-confirmed"></span>攝影團隊確定 2 堂　<span class="lg lg-shot"></span>2 堂都拍攝完成　<span class="pp-check sm">✓</span>影片完成</div>`;
   if(PHOTO_MODE || photoSchoolsOnly){
     const nHidden = getAllEvents().filter(ev=>matchesBaseFilter(ev) && photoHidden(ev)).length;
-    html += `<div class="pp-foot">${PHOTO_MODE?'':'📷 拍攝 10 校篩選中：'}一間學校已排定 2 場（計畫端勾「攝影」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏${PHOTO_MODE?'；已經過去的日期也會隱藏':''}。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
+    html += `<div class="pp-foot">${PHOTO_MODE?'':'📷 拍攝 10 校篩選中：'}一間學校已排定 2 場（計畫端勾「攝影預計」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏${PHOTO_MODE?'；已經過去的日期也會隱藏':''}。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
   }
   el.innerHTML = html;
   // 點學校：篩出那間（再點一次取消）
@@ -3450,7 +3450,7 @@ const VISIT_FLAGS = [
   {field:'visitSuyu',      label:'素瑜',     color:'#2E8B6B'},
   {field:'visitEnjia',     label:'恩嘉',     color:'#9B59B6'},
   {field:'visitCommittee', label:'委員',     color:'#5654A2'},
-  {field:'visitPhoto',     label:'攝影',     color:'#D9622B'}
+  {field:'visitPhoto',     label:'攝影預計', color:'#D9622B'}
 ];
 
 // Taiwan academic-year grouping: 上學期 runs 8/1–次年1/31 (includes 暑假),
@@ -3731,7 +3731,7 @@ function renderCategoryFilterRow(){
   });
   const fullIds = PHOTO_SCHOOL_IDS.filter(id=>photoPickedCount(id) >= PHOTO_PER_SCHOOL);
   const nPhoto = base.filter(ev=>isPhotoSchool(ev.schoolId) && (!cur || ev.category===cur) && (!fullIds.includes(ev.schoolId) || isPhotoPicked(ev) || ev.photoStatus==='confirmed')).length;
-  let photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（已選滿 2 場「攝影」的學校只列選好的 2 場）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
+  let photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（已選滿 2 場「攝影預計」的學校只列選好的 2 場）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
   let html = `<span class="vf-label">類別篩選：</span>` +
     `<button type="button" class="cat-filter-btn${cur===''?' active':''}" data-cat="">全部<span class="vf-count">${base.length}</span></button>`;
   Object.keys(CATEGORY_COLORS).forEach(cat=>{
@@ -4764,7 +4764,7 @@ async function exportItineraryXlsx(){
       if(ev.isTrip) return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', tripTime(ev), TRIP_LABEL, ev.title||'', ev.note||'', ev.note||'',
         '', ev.location||'', '', ev.people||'', '', '', '', '', '', '', '', '', ''];
       const c = itineraryContact(ev);
-      const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':'', ev.visitPhoto?'攝影團隊':''].filter(Boolean).join('、');
+      const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':'', ev.visitPhoto?'攝影預計':''].filter(Boolean).join('、');
       const committee = ev.visitCommittee ? (ev.visitCommitteeName || '委員') : '';
       const n = ev.visitConfirmed ? visitNums[ev.sessionId] : '';
       return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.category, ev.schoolName, courseOutline(ev.content), ev.content||'',
