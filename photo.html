@@ -749,6 +749,7 @@ input, select, textarea{min-width:0; max-width:100%;}
   .photo-box input:disabled{cursor:default;}
   .visit-check-group.readonly .visit-check-item{cursor:default; opacity:.9;}
   .photo-mode-hide{display:none !important;}
+  .cat-filter-btn.photo-schools-btn{margin-left:10px; --cf-bg:#FFE6D3; --cf-fg:#B4561F;}
   .pb-contact{background:#FFF6EF; border:1px solid #F3D5BF; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:15px; color:#7A3E14;}
   .pb-contact a{color:#B4561F; font-weight:800; text-decoration:none; font-size:16px;}
   .chip-photo{font-size:10.5px; font-weight:700; margin-top:1px;}
@@ -3548,6 +3549,7 @@ function renderVisitFilterRow(){
 }
 
 // 類別篩選按鈕：跟上方「篩選條件」的類別下拉選單是同一個篩選，按鈕上的數字＝其他篩選條件下各類別的場次數
+let photoSchoolsOnly = false;   // 類別篩選：只看拍攝 10 校
 function renderCategoryFilterRow(){
   const el = $('#categoryFilterRow');
   if(!el) return;
@@ -3560,14 +3562,19 @@ function renderCategoryFilterRow(){
     if(activeVisitFilter && !ev[activeVisitFilter]) return false;
     return true;
   });
+  const nPhoto = base.filter(ev=>isPhotoSchool(ev.schoolId) && (!cur || ev.category===cur)).length;
+  const photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（可以和類別一起用）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
   let html = `<span class="vf-label">類別篩選：</span>` +
     `<button type="button" class="cat-filter-btn${cur===''?' active':''}" data-cat="">全部<span class="vf-count">${base.length}</span></button>`;
   Object.keys(CATEGORY_COLORS).forEach(cat=>{
     const n = base.filter(ev=>ev.category===cat).length;
     html += `<button type="button" class="cat-filter-btn${cur===cat?' active':''}" data-cat="${escapeHtml(cat)}" style="--cf-bg:${CATEGORY_COLORS[cat]};--cf-fg:${CATEGORY_TEXT[cat]};">${escapeHtml(cat)}<span class="vf-count">${n}</span></button>`;
   });
+  html += photoBtn;
   el.innerHTML = html;
-  el.querySelectorAll('.cat-filter-btn').forEach(btn=>{
+  const pbtn = el.querySelector('.photo-schools-btn');
+  if(pbtn) pbtn.addEventListener('click', ()=>{ photoSchoolsOnly = !photoSchoolsOnly; renderAdmin(); });
+  el.querySelectorAll('.cat-filter-btn[data-cat]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const sel = $('#categoryFilter');
       if(sel) sel.value = btn.dataset.cat;
@@ -3660,6 +3667,7 @@ function matchesBaseFilter(ev){
   if(schoolName && ev.schoolName !== schoolName) return false;
   const category = $('#categoryFilter').value;
   if(category && ev.category !== category) return false;
+  if(photoSchoolsOnly && !isPhotoSchool(ev.schoolId)) return false;
   const semester = $('#semesterFilter').value;
   if(semester && normalizeSemester(ev.semester) !== semester) return false;
   return true;
@@ -4139,6 +4147,7 @@ function getVisibleTrips(){
   const sn = $('#schoolNameFilter'), cat = $('#categoryFilter'), sem = $('#semesterFilter');
   if(sn && sn.value) return [];
   if(cat && cat.value) return [];
+  if(photoSchoolsOnly) return [];
   if(markOnly && markedSchools.length) return [];
   return (DATA.trips||[]).filter(t=>{
     if(sem && sem.value && normalizeSemester(tripSemester(t.date)) !== sem.value) return false;
