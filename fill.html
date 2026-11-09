@@ -749,6 +749,12 @@ input, select, textarea{min-width:0; max-width:100%;}
   .photo-box input:disabled{cursor:default;}
   .visit-check-group.readonly .visit-check-item{cursor:default; opacity:.9;}
   .photo-mode-hide{display:none !important;}
+  .pb-stat{text-align:center; padding:6px 0 16px;}
+  .pb-stat-v{font-size:40px; font-weight:800; color:#B4561F; letter-spacing:1px; font-variant-numeric:tabular-nums;}
+  .pb-stat-v.done{color:#1E8A4C;}
+  .pb-stat-l{font-size:13px; color:var(--ink-soft); margin-top:2px;}
+  .pb-stat-bar{height:8px; border-radius:99px; background:#F3E3D6; margin:10px auto 0; max-width:360px; overflow:hidden;}
+  .pb-stat-bar span{display:block; height:100%; width:0; background:linear-gradient(90deg,#F0A36B,#1E8A4C); border-radius:99px; transition:width .3s;}
   .cat-filter-btn.photo-schools-btn{margin-left:10px; --cf-bg:#FFE6D3; --cf-fg:#B4561F;}
   .pb-contact{background:#FFF6EF; border:1px solid #F3D5BF; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:15px; color:#7A3E14;}
   .pb-contact a{color:#B4561F; font-weight:800; text-decoration:none; font-size:16px;}
@@ -2982,6 +2988,16 @@ async function _commitSaveSchoolInner(school){
 const PHOTO_MODE = !SCHOOL_ID && /^\/photo/.test(location.pathname);
 // 115學年度拍攝的 10 間學校（攝影團隊頁只顯示這 10 校）
 const PHOTO_SCHOOL_IDS = ['school-04','school-13','school-16','school-17','school-20','school-21','school-25','school-29','school-30','school-32'];
+const PHOTO_TARGET = 10;   // 本學年需要攝影團隊跟拍的總次數
+function renderPhotoCount(){
+  const el = document.getElementById('photoCountStat');
+  if(!el) return;
+  const n = DATA.schools.reduce((sum,sc)=>sum + (sc.sessions||[]).filter(x=>x.photoStatus==='confirmed').length, 0);
+  el.textContent = `${n} / ${PHOTO_TARGET}`;
+  el.classList.toggle('done', n >= PHOTO_TARGET);
+  const bar = document.getElementById('photoCountBar');
+  if(bar) bar.style.width = Math.min(100, n / PHOTO_TARGET * 100) + '%';
+}
 function isPhotoSchool(id){ return PHOTO_SCHOOL_IDS.includes(id); }
 function photoBoxHTML(ev){
   if(!isPhotoSchool(ev.schoolId)) return '';
@@ -3031,7 +3047,8 @@ if(PHOTO_MODE){
   const st = document.createElement('style'); st.textContent = 'a[href^="/fill/"]{cursor:default; pointer-events:none;}'; document.head.appendChild(st);
   const help = document.createElement('div');
   help.className = 'card';
-  help.innerHTML = `<div class="pb-contact">📞 主要聯繫助理：<b>陳恩嘉</b>　<a href="tel:0910124562">0910-124-562</a></div>
+  help.innerHTML = `<div class="pb-stat"><div class="pb-stat-v" id="photoCountStat">0 / ${PHOTO_TARGET}</div><div class="pb-stat-l">拍攝次數（已勾「拍攝確定」）</div><div class="pb-stat-bar"><span id="photoCountBar"></span></div></div>
+    <div class="pb-contact">📞 主要聯繫助理：<b>陳恩嘉</b>　<a href="tel:0910124562">0910-124-562</a></div>
     <div class="card-title">📷 攝影團隊請看這裡</div>
     <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 10 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
     <b style="color:#B4561F;">橘色框</b>＝計畫端希望拍攝的場次：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、聯絡電話、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。<br>
@@ -3631,6 +3648,7 @@ function renderCategoryFilterRow(){
 
 function renderAdmin(){
   renderStats();
+  if(PHOTO_MODE) renderPhotoCount();
   renderLegend();
   renderCategoryFilterRow();
   renderVisitFilterRow();
@@ -3902,12 +3920,13 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
     const next = t.checked ? t.dataset.pstatus : '';
     session.photoStatus = next;
     renderListView();
+    if(PHOTO_MODE) renderPhotoCount();
     if(activeView==='cal') syncAdminCalToMonthFilter();
     try{
       await updateSession(session.id, { photo_status: next });
       showToast(next==='confirmed' ? '✓ 已設為拍攝確定，請填攝影師與集合時間' : next==='unable' ? '✓ 已設為拍攝無法' : '✓ 已取消');
     }catch(err){
-      session.photoStatus = prev; renderListView();
+      session.photoStatus = prev; renderListView(); if(PHOTO_MODE) renderPhotoCount();
       showToast('⚠️ 儲存失敗（請確認已執行 38 號 SQL）：'+err.message);
     }
     return;
