@@ -760,6 +760,34 @@ input, select, textarea{min-width:0; max-width:100%;}
   .pb-contact a{color:#B4561F; font-weight:800; text-decoration:none; font-size:16px;}
   .chip-photo{font-size:10.5px; font-weight:700; margin-top:1px;}
   .chip-photo.ok{color:#1E8A4C;} .chip-photo.no{color:#C0392B;} .chip-photo.wait{color:#B4561F;}
+
+  /* 拍攝與影片進度面板 */
+  .pp-stats{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px;}
+  .pp-stat{text-align:center; background:#FFF8F2; border:1px solid #F3D5BF; border-radius:12px; padding:12px 8px;}
+  .pp-stat .pp-v{font-size:30px; font-weight:800; color:#B4561F; font-variant-numeric:tabular-nums;}
+  .pp-stat.done .pp-v{color:#1E8A4C;}
+  .pp-stat .pp-l{font-size:12.5px; color:var(--ink-soft);}
+  .pp-stat .pb-stat-bar{max-width:200px; margin-top:8px;}
+  .pp-schools{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px;}
+  .pp-school{border:1.5px solid #F3D5BF; background:#fff; border-radius:10px; padding:8px 10px; cursor:pointer; transition:box-shadow .15s;}
+  .pp-school:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .pp-school.full{border-color:#9ED3B0; background:#F2FAF5;}
+  .pp-school.active{outline:2.5px solid #B4561F; outline-offset:1px;}
+  .pp-school.pp-highlight{cursor:default; border-style:dashed; background:#FFFDF6;}
+  .pp-name{font-weight:800; font-size:13.5px; color:var(--ink);}
+  .pp-school.full .pp-name{color:#1E8A4C;}
+  .pp-nums{font-size:12px; color:var(--ink-soft); margin:2px 0 4px;}
+  .pp-nums b{color:var(--ink);}
+  .pp-video{display:inline-flex; align-items:center; gap:4px; font-size:11.5px; color:#9A9BA3; font-weight:600; margin:0 !important; padding:0 !important; cursor:pointer;}
+  span.pp-video{cursor:default;}
+  .pp-video.on{color:#1E8A4C;}
+  .pp-video input{width:14px; height:14px; margin:0; accent-color:#1E8A4C;}
+  .pp-foot{margin-top:10px; font-size:12.5px; color:var(--ink-soft); display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  tr.pb-hidden-row td{opacity:.45;}
+  .pb-done{display:inline-block; margin-top:5px; font-size:12px; font-weight:700; color:#1E8A4C;}
+  .pb-done input{accent-color:#1E8A4C; width:14px; height:14px; margin:0 4px 0 0; vertical-align:-2px;}
+  .pb-full-note{font-size:11px; color:#9A9BA3; margin-top:3px;}
+  @media (max-width:720px){ .pp-stats{grid-template-columns:1fr 1fr 1fr; gap:6px;} .pp-stat .pp-v{font-size:20px;} }
 </style>
 <title>總覽彙整 — 藝師藝有計畫 115學年度</title>
 </head>
@@ -772,6 +800,11 @@ input, select, textarea{min-width:0; max-width:100%;}
         <div class="stat-box"><div class="v" id="statSchools">0 / 32</div><div class="l">已填表學校數</div></div>
         <div class="stat-box"><div class="v" id="statVisitedS1">0 / 32</div><div class="l">上學期已訪視校次</div></div>
         <div class="stat-box"><div class="v" id="statVisitedS2">0 / 32</div><div class="l">下學期已訪視校次</div></div>
+      </div>
+
+      <div class="card" id="photoPanelCard">
+        <div class="card-title">📷 拍攝與影片進度（10 校）<span style="font-weight:400;font-size:12px;color:var(--ink-faint);margin-left:8px;">點學校可篩出那間的課；「已拍攝完成」在每堂課的拍攝框裡勾</span></div>
+        <div id="photoPanel"></div>
       </div>
 
       <div class="card" id="changeLogCard">
@@ -2900,7 +2933,7 @@ async function _commitSaveSchoolInner(school){
       visitEnjia: !!existing.visitEnjia,
       visitCommittee: !!existing.visitCommittee,
       visitPhoto: !!existing.visitPhoto,
-      photoStatus: existing.photoStatus||'', photoCrew: existing.photoCrew||'', photoCrewPhone: existing.photoCrewPhone||'', photoMeetTime: existing.photoMeetTime||'',
+      photoStatus: existing.photoStatus||'', photoDone: !!existing.photoDone, photoCrew: existing.photoCrew||'', photoCrewPhone: existing.photoCrewPhone||'', photoMeetTime: existing.photoMeetTime||'',
       photoMeetPlace: existing.photoMeetPlace||'', photoNote: existing.photoNote||'',
       locked: true
     };
@@ -2954,6 +2987,81 @@ function renderPhotoCount(){
   if(bar) bar.style.width = Math.min(100, n / PHOTO_TARGET * 100) + '%';
 }
 function isPhotoSchool(id){ return PHOTO_SCHOOL_IDS.includes(id); }
+
+/* ---------- 拍攝與影片進度（攝影頁、總覽頁共用） ---------- */
+const PHOTO_SHORT = {'school-04':'瑞豐國小','school-13':'崇明國中','school-16':'五福國小','school-17':'林園國小','school-20':'國風國中',
+  'school-21':'新生國小','school-25':'忠孝國小','school-29':'鹿江國中小','school-30':'力行國小','school-32':'中教大實小'};
+const PHOTO_PER_SCHOOL = 2, VIDEO_TARGET = 11;
+let showHiddenPhoto = false;
+function photoConfirmedCount(schoolId){
+  const sc = DATA.schools.find(s=>s.id===schoolId);
+  return sc ? (sc.sessions||[]).filter(x=>x.photoStatus==='confirmed').length : 0;
+}
+// 攝影頁要隱藏的課：已過的日期、或這間學校已經確定滿 2 場（自己是確定的那場不隱藏）
+function photoHidden(ev){
+  if(!PHOTO_MODE || !isPhotoSchool(ev.schoolId)) return false;
+  if(ev.photoStatus==='confirmed') return false;
+  if(ev.date && ev.date < todayDateKey()) return true;
+  return photoConfirmedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
+}
+function photoStats(){
+  let conf=0, done=0;
+  DATA.schools.forEach(sc=>{ if(!isPhotoSchool(sc.id)) return; (sc.sessions||[]).forEach(x=>{ if(x.photoStatus==='confirmed'){ conf++; if(x.photoDone) done++; } }); });
+  const videos = DATA.schools.filter(sc=>isPhotoSchool(sc.id) && sc.videoDone).length + (DATA.highlightDone ? 1 : 0);
+  return {conf, done, videos};
+}
+function renderPhotoPanel(){
+  const el = document.getElementById('photoPanel');
+  if(!el) return;
+  const st = photoStats();
+  const stat = (v, t, l, cls) => `<div class="pp-stat ${v>=t?'done':''} ${cls||''}"><div class="pp-v">${v} / ${t}</div><div class="pp-l">${l}</div><div class="pb-stat-bar"><span style="width:${Math.min(100, v/t*100)}%"></span></div></div>`;
+  const curSchool = $('#schoolNameFilter') ? $('#schoolNameFilter').value : '';
+  let html = `<div class="pp-stats">${stat(st.conf, PHOTO_TARGET, '拍攝確定')}${stat(st.done, PHOTO_TARGET, '已拍攝完成')}${stat(st.videos, VIDEO_TARGET, '影片製作完成')}</div>`;
+  html += `<div class="pp-schools">`;
+  PHOTO_SCHOOL_IDS.forEach(id=>{
+    const sc = DATA.schools.find(s=>s.id===id); if(!sc) return;
+    const c = (sc.sessions||[]).filter(x=>x.photoStatus==='confirmed');
+    const d = c.filter(x=>x.photoDone).length;
+    const full = c.length >= PHOTO_PER_SCHOOL;
+    const vchk = PHOTO_MODE ? (sc.videoDone ? '<span class="pp-video on">🎬 影片完成</span>' : '<span class="pp-video">🎬 影片未完成</span>')
+      : `<label class="pp-video ${sc.videoDone?'on':''}"><input type="checkbox" class="pp-video-chk" data-school-id="${id}" ${sc.videoDone?'checked':''}>🎬 影片完成</label>`;
+    html += `<div class="pp-school ${full?'full':''} ${curSchool===sc.name?'active':''}" data-name="${escapeHtml(sc.name)}">
+      <div class="pp-name">${escapeHtml(PHOTO_SHORT[id]||sc.name)}${full?' ✓':''}</div>
+      <div class="pp-nums">確定 <b>${c.length}/${PHOTO_PER_SCHOOL}</b>・完成 <b>${d}/${PHOTO_PER_SCHOOL}</b></div>${vchk}</div>`;
+  });
+  html += `<div class="pp-school pp-highlight">
+      <div class="pp-name">✨ 全計畫精華</div><div class="pp-nums">第 11 支影片</div>
+      ${PHOTO_MODE ? (DATA.highlightDone?'<span class="pp-video on">🎬 影片完成</span>':'<span class="pp-video">🎬 影片未完成</span>')
+        : `<label class="pp-video ${DATA.highlightDone?'on':''}"><input type="checkbox" class="pp-highlight-chk" ${DATA.highlightDone?'checked':''}>🎬 影片完成</label>`}</div>`;
+  html += `</div>`;
+  if(PHOTO_MODE){
+    const nHidden = getAllEvents().filter(ev=>matchesBaseFilter(ev) && photoHidden(ev)).length;
+    html += `<div class="pp-foot">已排滿 2 場的學校、和已經過去的日期會自動隱藏。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
+  }
+  el.innerHTML = html;
+  // 點學校：篩出那間（再點一次取消）
+  el.querySelectorAll('.pp-school[data-name]').forEach(card=>card.addEventListener('click', e=>{
+    if(e.target.closest('label')) return;
+    const sel = $('#schoolNameFilter'); if(!sel) return;
+    sel.value = (sel.value===card.dataset.name) ? '' : card.dataset.name;
+    renderAdmin();
+  }));
+  const sh = el.querySelector('#ppShowHidden'); if(sh) sh.addEventListener('click', ()=>{ showHiddenPhoto = !showHiddenPhoto; renderAdmin(); });
+  const cs = el.querySelector('#ppClearSchool'); if(cs) cs.addEventListener('click', ()=>{ $('#schoolNameFilter').value=''; renderAdmin(); });
+  el.querySelectorAll('.pp-video-chk').forEach(chk=>chk.addEventListener('change', async ()=>{
+    const sc = DATA.schools.find(s=>s.id===chk.dataset.schoolId); if(!sc) return;
+    const prev = !!sc.videoDone; sc.videoDone = chk.checked; renderPhotoPanel();
+    try{ await sbFetch(`/schools?id=eq.${sc.id}`, {method:'PATCH', body: JSON.stringify({video_done: chk.checked})}); showToast('✓ 影片進度已儲存'); }
+    catch(err){ sc.videoDone = prev; renderPhotoPanel(); showToast('⚠️ 儲存失敗（請確認已執行 41 號 SQL）：'+err.message); }
+  }));
+  const hc = el.querySelector('.pp-highlight-chk');
+  if(hc) hc.addEventListener('change', async ()=>{
+    const prev = !!DATA.highlightDone; DATA.highlightDone = hc.checked; renderPhotoPanel();
+    try{ await sbFetch('/project_flags', {method:'POST', headers:{'Prefer':'resolution=merge-duplicates'}, body: JSON.stringify([{key:'highlight_video_done', value: hc.checked}])}); showToast('✓ 精華影片進度已儲存'); }
+    catch(err){ DATA.highlightDone = prev; renderPhotoPanel(); showToast('⚠️ 儲存失敗（請確認已執行 41 號 SQL）：'+err.message); }
+  });
+}
+
 function photoBoxHTML(ev){
   if(!isPhotoSchool(ev.schoolId)) return '';
   const st = ev.photoStatus || '';
@@ -2968,14 +3076,18 @@ function photoBoxHTML(ev){
       <div class="pb-checks">${noBox}</div></div>`;
   }
   const title = st==='confirmed' ? '📷 拍攝確定' : st==='unable' ? '📷 拍攝無法' : '📷 計畫端希望拍攝・待回覆';
+  const full = st!=='confirmed' && photoConfirmedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
+  const doneHTML = st==='confirmed' ? (PHOTO_MODE
+      ? (ev.photoDone ? '<div class="pb-done">✓ 已拍攝完成</div>' : '')
+      : `<label class="pb-done"><input type="checkbox" class="pb-done-chk" ${ids} ${ev.photoDone?'checked':''}>已拍攝完成</label>`) : '';
   let fields = '';
   if(st==='confirmed') fields = `<div class="pb-fields">${f('photoCrew','攝影師','姓名')}${f('photoCrewPhone','聯絡電話','手機')}${f('photoMeetTime','集合時間','例：08:15')}${f('photoMeetPlace','集合地點','例：捷運站1號出口')}</div>`;
   return `<div class="photo-box ${st?'st-'+st:''}">
     <div class="pb-title">${title}</div>
     <div class="pb-checks">
-      <label><input type="checkbox" class="pb-ok" data-pstatus="confirmed" ${ids} ${st==='confirmed'?'checked':''}>拍攝確定</label>
+      <label><input type="checkbox" class="pb-ok" data-pstatus="confirmed" ${ids} ${st==='confirmed'?'checked':''} ${full?'disabled':''}>拍攝確定</label>
       ${noBox}
-    </div>${fields}</div>`;
+    </div>${full?'<div class="pb-full-note">這間學校已確定 2 場</div>':''}${fields}${doneHTML}</div>`;
 }
 function chipPhotoHTML(ev){
   if(ev.photoStatus==='confirmed') return `<div class="chip-photo ok">📷 拍攝確定${ev.photoCrew?' '+escapeHtml(ev.photoCrew):''}${ev.photoMeetTime?' '+escapeHtml(ev.photoMeetTime)+'集合':''}</div>`;
@@ -2985,7 +3097,7 @@ function chipPhotoHTML(ev){
 }
 const PHOTO_DB_COLUMN = { photoStatus:'photo_status', photoCrew:'photo_crew', photoCrewPhone:'photo_crew_phone', photoMeetTime:'photo_meet_time', photoMeetPlace:'photo_meet_place', photoNote:'photo_note' };
 function photoText(ev){
-  if(ev.photoStatus==='confirmed') return '拍攝確定';
+  if(ev.photoStatus==='confirmed') return ev.photoDone ? '拍攝完成' : '拍攝確定';
   if(ev.photoStatus==='unable') return '拍攝無法';
   return ev.visitPhoto ? '待回覆' : '';
 }
@@ -2994,7 +3106,7 @@ if(PHOTO_MODE){
   document.title = '攝影團隊行程 — 藝師藝有計畫 115學年度';
   const brand = document.querySelector('.top-bar .brand');
   if(brand) brand.textContent = '教育部 · 藝師藝有計畫 115學年度 · 攝影團隊行程（10 校）';
-  ['.stat-row','#changeLogCard','#colorLegend'].forEach(sel=>{ const el=document.querySelector(sel); if(el) el.classList.add('photo-mode-hide'); });
+  ['.stat-row','#changeLogCard','#colorLegend','#photoPanelCard'].forEach(sel=>{ const el=document.querySelector(sel); if(el) el.classList.add('photo-mode-hide'); });
   const gb = document.querySelector('#goToSchoolFillBtn'); if(gb && gb.closest('.field')) gb.closest('.field').classList.add('photo-mode-hide');
   const ex = document.querySelector('#exportAllCsvBtn'); if(ex && ex.closest('.card')) ex.closest('.card').classList.add('photo-mode-hide');
   // 不讓攝影團隊點進學校填表頁
@@ -3002,12 +3114,13 @@ if(PHOTO_MODE){
   const st = document.createElement('style'); st.textContent = 'a[href^="/fill/"]{cursor:default; pointer-events:none;}'; document.head.appendChild(st);
   const help = document.createElement('div');
   help.className = 'card';
-  help.innerHTML = `<div class="pb-stat"><div class="pb-stat-v" id="photoCountStat">0 / ${PHOTO_TARGET}</div><div class="pb-stat-l">拍攝次數（已勾「拍攝確定」）</div><div class="pb-stat-bar"><span id="photoCountBar"></span></div></div>
-    <div class="pb-contact">📞 主要聯繫助理：<b>陳恩嘉</b>　<a href="tel:0910124562">0910-124-562</a></div>
+  help.innerHTML = `<div id="photoPanel"></div>
+    <div class="pb-contact" style="margin-top:14px;">📞 主要聯繫助理：<b>陳恩嘉</b>　<a href="tel:0910124562">0910-124-562</a></div>
     <div class="card-title">📷 攝影團隊請看這裡</div>
     <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 10 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
     <b style="color:#B4561F;">橘色框</b>＝計畫端希望拍攝的場次：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、聯絡電話、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。<br>
-    <b style="color:#9A9BA3;">灰色框</b>＝目前沒有排拍攝的場次，如果那天沒辦法拍，可以先勾「拍攝無法」。填寫的內容會即時同步給計畫端。</p>`;
+    <b style="color:#9A9BA3;">灰色框</b>＝目前沒有排拍攝的場次，如果那天沒辦法拍，可以先勾「拍攝無法」。<br>
+    每間學校拍 <b>2 場</b>：一間學校確定滿 2 場後，那間的其他課會自動隱藏；已經過去的日期也會隱藏。填寫的內容會即時同步給計畫端。</p>`;
   const content = document.querySelector('#content');
   if(content) content.insertBefore(help, content.firstChild);
 }
@@ -3043,7 +3156,7 @@ function getAllEvents(){
         visitCommittee: !!sess.visitCommittee,
         visitCommitteeName: sess.visitCommitteeName || '',
         visitPhoto: !!sess.visitPhoto,
-        photoStatus: sess.photoStatus || '', photoCrew: sess.photoCrew || '', photoCrewPhone: sess.photoCrewPhone || '', photoMeetTime: sess.photoMeetTime || '',
+        photoStatus: sess.photoStatus || '', photoDone: !!sess.photoDone, photoCrew: sess.photoCrew || '', photoCrewPhone: sess.photoCrewPhone || '', photoMeetTime: sess.photoMeetTime || '',
         photoMeetPlace: sess.photoMeetPlace || '', photoNote: sess.photoNote || ''
       });
     });
@@ -3603,7 +3716,7 @@ function renderCategoryFilterRow(){
 
 function renderAdmin(){
   renderStats();
-  if(PHOTO_MODE) renderPhotoCount();
+  renderPhotoPanel();
   renderLegend();
   renderCategoryFilterRow();
   renderVisitFilterRow();
@@ -3676,6 +3789,7 @@ function matchesFilter(ev){
   if(!matchesBaseFilter(ev)) return false;
   if(activeVisitFilter && !ev[activeVisitFilter]) return false;
   if(markOnly && markedSchools.length && !evMark(ev)) return false;
+  if(PHOTO_MODE && !showHiddenPhoto && photoHidden(ev)) return false;
   return true;
 }
 
@@ -3766,6 +3880,7 @@ function renderListView(){
     `;
     tr.dataset.week = wk;
     if(collapsedWeeks.has(wk)) tr.classList.add('week-row-hidden');
+    if(photoHidden(ev)) tr.classList.add('pb-hidden-row');
     const mk = evMark(ev);
     if(mk){ tr.classList.add('marked'); tr.style.setProperty('--mk', mk.c); tr.style.setProperty('--mk-bg', mk.bg); }
     tbody.appendChild(tr);
@@ -3867,6 +3982,17 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
   const t = e.target;
   if(!t.matches) return;
 
+  // --- 已拍攝完成（計畫端勾）---
+  if(t.matches('input.pb-done-chk')){
+    const session = findSessionByDataset(t);
+    if(!session) return;
+    const prev = !!session.photoDone;
+    session.photoDone = t.checked;
+    renderPhotoPanel();
+    try{ await updateSession(session.id, { photo_done: t.checked }); showToast(t.checked?'✓ 已標記拍攝完成':'✓ 已取消拍攝完成'); }
+    catch(err){ session.photoDone = prev; t.checked = prev; renderPhotoPanel(); showToast('⚠️ 儲存失敗（請確認已執行 41 號 SQL）：'+err.message); }
+    return;
+  }
   // --- 拍攝確定／拍攝無法（兩個只能選一個）---
   if(t.matches('input[data-pstatus]')){
     const session = findSessionByDataset(t);
@@ -3874,14 +4000,15 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
     const prev = session.photoStatus || '';
     const next = t.checked ? t.dataset.pstatus : '';
     session.photoStatus = next;
+    if(next!=='confirmed') session.photoDone = false;
     renderListView();
-    if(PHOTO_MODE) renderPhotoCount();
+    renderPhotoPanel();
     if(activeView==='cal') syncAdminCalToMonthFilter();
     try{
-      await updateSession(session.id, { photo_status: next });
+      await updateSession(session.id, next==='confirmed' ? { photo_status: next } : { photo_status: next, photo_done: false });
       showToast(next==='confirmed' ? '✓ 已設為拍攝確定，請填攝影師與集合時間' : next==='unable' ? '✓ 已設為拍攝無法' : '✓ 已取消');
     }catch(err){
-      session.photoStatus = prev; renderListView(); if(PHOTO_MODE) renderPhotoCount();
+      session.photoStatus = prev; renderListView(); renderPhotoPanel();
       showToast('⚠️ 儲存失敗（請確認已執行 38 號 SQL）：'+err.message);
     }
     return;
@@ -4669,7 +4796,7 @@ function dbRowToSession(r){
     studentGrades: r.student_grades||[], location: r.location||'', content: r.content||'',
     visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
     visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
-    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', visitPhoto: r.visit_photo||false, photoStatus: r.photo_status||'', photoCrew: r.photo_crew||'', photoCrewPhone: r.photo_crew_phone||'', photoMeetTime: r.photo_meet_time||'', photoMeetPlace: r.photo_meet_place||'', photoNote: r.photo_note||'', locked: r.locked||false,
+    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', visitPhoto: r.visit_photo||false, photoStatus: r.photo_status||'', photoDone: !!r.photo_done, photoCrew: r.photo_crew||'', photoCrewPhone: r.photo_crew_phone||'', photoMeetTime: r.photo_meet_time||'', photoMeetPlace: r.photo_meet_place||'', photoNote: r.photo_note||'', locked: r.locked||false,
     countedHours: (r.counted_hours===null || r.counted_hours===undefined) ? null : Number(r.counted_hours),
     checkNote: r.check_note || ''
   };
@@ -4684,6 +4811,7 @@ function schoolRowToObj(school, sessions){
     studentGroups: school.student_groups||[],
     contactTeacher: school.contact_teacher||'', contactPhone: school.contact_phone||'',
     basicInfoLocked: school.basic_info_locked||false,
+    videoDone: !!school.video_done,
     sessions: (sessions||[]).map(dbRowToSession),
     updatedAt: school.updated_at
   };
@@ -4701,6 +4829,10 @@ async function loadData(){
     const bySchool = {};
     (sessions||[]).forEach(s=>{ (bySchool[s.school_id]=bySchool[s.school_id]||[]).push(s); });
     DATA.schools = (schools||[]).map(sc => schoolRowToObj(sc, bySchool[sc.id]||[]));
+    try{
+      const flags = await sbFetch('/project_flags?select=*');
+      DATA.highlightDone = !!((flags||[]).find(x=>x.key==='highlight_video_done')||{}).value;
+    }catch(e){ DATA.highlightDone = false; }
     if(PHOTO_MODE){ DATA.schools = DATA.schools.filter(sc=>isPhotoSchool(sc.id)); DATA.changeLog = []; DATA.trips = []; return; }
     try{
       const logs = await getChangeLogs(false);
@@ -4776,7 +4908,7 @@ async function saveData(){
 let _adminLoadedAt = Date.now();
 let _adminReloading = false;
 let _adminDataSig = '';
-function adminDataSig(){ return JSON.stringify([DATA.schools, DATA.changeLog, DATA.trips]); }
+function adminDataSig(){ return JSON.stringify([DATA.schools, DATA.changeLog, DATA.trips, DATA.highlightDone]); }
 async function reloadAdminData(manual){
   if(_adminReloading) return;
   _adminReloading = true;
