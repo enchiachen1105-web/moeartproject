@@ -2988,7 +2988,7 @@ async function _commitSaveSchoolInner(school){
 const PHOTO_MODE = !SCHOOL_ID && /^\/photo/.test(location.pathname);
 // 115學年度拍攝的 10 間學校（攝影團隊頁只顯示這 10 校）
 const PHOTO_SCHOOL_IDS = ['school-04','school-13','school-16','school-17','school-20','school-21','school-25','school-29','school-30','school-32'];
-const PHOTO_TARGET = 10;   // 本學年需要攝影團隊跟拍的總次數
+const PHOTO_TARGET = 20;   // 本學年需要攝影團隊跟拍的總次數（10 校 × 2 次）
 function renderPhotoCount(){
   const el = document.getElementById('photoCountStat');
   if(!el) return;
