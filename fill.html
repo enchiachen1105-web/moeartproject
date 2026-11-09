@@ -731,6 +731,10 @@ input, select, textarea{min-width:0; max-width:100%;}
   /* ---------- 攝影團隊：拍攝確定／拍攝無法 ---------- */
   .photo-box{margin-top:8px; padding:8px 9px; border-radius:9px; background:#FFF6EF; border:1px solid #F3D5BF;}
   .photo-box.st-confirmed{background:#EEF8F1; border-color:#BFE3CB;}
+  .photo-box.pb-muted{background:#F4F4F6; border-color:#E2E3E8;}
+  .photo-box.pb-muted .pb-title{color:#9A9BA3;}
+  .photo-box.pb-muted.st-unable{background:#FDEEEE; border-color:#F2C4C4;}
+  .photo-box.pb-muted.st-unable .pb-title{color:#C0392B;}
   .photo-box.st-unable{background:#FDEEEE; border-color:#F2C4C4;}
   .photo-box .pb-title{font-size:11.5px; font-weight:800; color:#B4561F; margin-bottom:4px;}
   .photo-box.st-confirmed .pb-title{color:#1E8A4C;} .photo-box.st-unable .pb-title{color:#C0392B;}
@@ -745,6 +749,8 @@ input, select, textarea{min-width:0; max-width:100%;}
   .photo-box input:disabled{cursor:default;}
   .visit-check-group.readonly .visit-check-item{cursor:default; opacity:.9;}
   .photo-mode-hide{display:none !important;}
+  .pb-contact{background:#FFF6EF; border:1px solid #F3D5BF; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:15px; color:#7A3E14;}
+  .pb-contact a{color:#B4561F; font-weight:800; text-decoration:none; font-size:16px;}
   .chip-photo{font-size:10.5px; font-weight:700; margin-top:1px;}
   .chip-photo.ok{color:#1E8A4C;} .chip-photo.no{color:#C0392B;} .chip-photo.wait{color:#B4561F;}
 </style>
@@ -2932,7 +2938,7 @@ async function _commitSaveSchoolInner(school){
       visitEnjia: !!existing.visitEnjia,
       visitCommittee: !!existing.visitCommittee,
       visitPhoto: !!existing.visitPhoto,
-      photoStatus: existing.photoStatus||'', photoCrew: existing.photoCrew||'', photoMeetTime: existing.photoMeetTime||'',
+      photoStatus: existing.photoStatus||'', photoCrew: existing.photoCrew||'', photoCrewPhone: existing.photoCrewPhone||'', photoMeetTime: existing.photoMeetTime||'',
       photoMeetPlace: existing.photoMeetPlace||'', photoNote: existing.photoNote||'',
       locked: true
     };
@@ -2981,16 +2987,22 @@ function photoBoxHTML(ev){
   const st = ev.photoStatus || '';
   if(!PHOTO_MODE && !st && !ev.visitPhoto) return '';   // 總覽頁：有勾「攝影」或攝影團隊回覆過才顯示
   const ids = `data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}"`;
-  const title = st==='confirmed' ? '📷 拍攝確定' : st==='unable' ? '📷 拍攝無法' : (ev.visitPhoto ? '📷 計畫端希望拍攝・待回覆' : '📷 拍攝');
   const f = (field, label, ph) => `<span>${label}</span><input type="text" class="pb-input" data-pfield="${field}" ${ids} placeholder="${ph}" value="${escapeHtml(ev[field]||'')}">`;
+  const noBox = `<label><input type="checkbox" class="pb-no" data-pstatus="unable" ${ids} ${st==='unable'?'checked':''}>拍攝無法</label>`;
+  // 計畫端沒有勾「攝影」（沒有主動希望拍攝）：灰色、只留「拍攝無法」
+  if(!ev.visitPhoto && st!=='confirmed'){
+    return `<div class="photo-box pb-muted ${st?'st-'+st:''}">
+      <div class="pb-title">${st==='unable' ? '📷 拍攝無法' : '📷 未排拍攝'}</div>
+      <div class="pb-checks">${noBox}</div></div>`;
+  }
+  const title = st==='confirmed' ? '📷 拍攝確定' : st==='unable' ? '📷 拍攝無法' : '📷 計畫端希望拍攝・待回覆';
   let fields = '';
-  if(st==='confirmed') fields = `<div class="pb-fields">${f('photoCrew','攝影師','姓名')}${f('photoMeetTime','集合時間','例：08:15')}${f('photoMeetPlace','集合地點','例：捷運站1號出口')}</div>`;
-  else if(st==='unable') fields = `<div class="pb-fields">${f('photoNote','原因','（可不填）')}</div>`;
+  if(st==='confirmed') fields = `<div class="pb-fields">${f('photoCrew','攝影師','姓名')}${f('photoCrewPhone','聯絡電話','手機')}${f('photoMeetTime','集合時間','例：08:15')}${f('photoMeetPlace','集合地點','例：捷運站1號出口')}</div>`;
   return `<div class="photo-box ${st?'st-'+st:''}">
     <div class="pb-title">${title}</div>
     <div class="pb-checks">
       <label><input type="checkbox" class="pb-ok" data-pstatus="confirmed" ${ids} ${st==='confirmed'?'checked':''}>拍攝確定</label>
-      <label><input type="checkbox" class="pb-no" data-pstatus="unable" ${ids} ${st==='unable'?'checked':''}>拍攝無法</label>
+      ${noBox}
     </div>${fields}</div>`;
 }
 function chipPhotoHTML(ev){
@@ -2999,10 +3011,10 @@ function chipPhotoHTML(ev){
   if(ev.visitPhoto) return `<div class="chip-photo wait">📷 待回覆</div>`;
   return '';
 }
-const PHOTO_DB_COLUMN = { photoStatus:'photo_status', photoCrew:'photo_crew', photoMeetTime:'photo_meet_time', photoMeetPlace:'photo_meet_place', photoNote:'photo_note' };
+const PHOTO_DB_COLUMN = { photoStatus:'photo_status', photoCrew:'photo_crew', photoCrewPhone:'photo_crew_phone', photoMeetTime:'photo_meet_time', photoMeetPlace:'photo_meet_place', photoNote:'photo_note' };
 function photoText(ev){
   if(ev.photoStatus==='confirmed') return '拍攝確定';
-  if(ev.photoStatus==='unable') return '拍攝無法' + (ev.photoNote?`（${ev.photoNote}）`:'');
+  if(ev.photoStatus==='unable') return '拍攝無法';
   return ev.visitPhoto ? '待回覆' : '';
 }
 
@@ -3018,9 +3030,11 @@ if(PHOTO_MODE){
   const st = document.createElement('style'); st.textContent = 'a[href^="/fill/"]{cursor:default; pointer-events:none;}'; document.head.appendChild(st);
   const help = document.createElement('div');
   help.className = 'card';
-  help.innerHTML = `<div class="card-title">📷 攝影團隊請看這裡</div>
+  help.innerHTML = `<div class="pb-contact">📞 主要聯繫助理：<b>陳恩嘉</b>　<a href="tel:0910124562">0910-124-562</a></div>
+    <div class="card-title">📷 攝影團隊請看這裡</div>
     <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 10 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
-    每堂課右下角的橘色框：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。填寫的內容會即時同步給計畫端。</p>`;
+    <b style="color:#B4561F;">橘色框</b>＝計畫端希望拍攝的場次：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、聯絡電話、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。<br>
+    <b style="color:#9A9BA3;">灰色框</b>＝目前沒有排拍攝的場次，如果那天沒辦法拍，可以先勾「拍攝無法」。填寫的內容會即時同步給計畫端。</p>`;
   const content = document.querySelector('#content');
   if(content) content.insertBefore(help, content.firstChild);
 }
@@ -3056,7 +3070,7 @@ function getAllEvents(){
         visitCommittee: !!sess.visitCommittee,
         visitCommitteeName: sess.visitCommitteeName || '',
         visitPhoto: !!sess.visitPhoto,
-        photoStatus: sess.photoStatus || '', photoCrew: sess.photoCrew || '', photoMeetTime: sess.photoMeetTime || '',
+        photoStatus: sess.photoStatus || '', photoCrew: sess.photoCrew || '', photoCrewPhone: sess.photoCrewPhone || '', photoMeetTime: sess.photoMeetTime || '',
         photoMeetPlace: sess.photoMeetPlace || '', photoNote: sess.photoNote || ''
       });
     });
@@ -4590,10 +4604,10 @@ async function exportItineraryXlsx(){
     addSheet('訪視行程', [
       ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['類別',8,'center'],['學校',24],['課程大綱',26],['完整上課內容',50,'left','hidden'],
       ['授課藝師',14],['上課地點',18],['訪視狀態',10,'center'],['助理／攝影',14,'center'],['訪視委員',14],['第幾次訪視',10,'center'],
-      ['承辦人員',12],['聯絡電話',18],['拍攝狀態',12,'center'],['攝影師',12],['集合時間',10,'center'],['集合地點',22]
+      ['承辦人員',12],['聯絡電話',18],['拍攝狀態',12,'center'],['攝影師',12],['攝影師電話',14],['集合時間',10,'center'],['集合地點',22]
     ], visits, ev=>{
       if(ev.isTrip) return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', tripTime(ev), TRIP_LABEL, ev.title||'', ev.note||'', ev.note||'',
-        '', ev.location||'', '', ev.people||'', '', '', '', '', '', '', '', ''];
+        '', ev.location||'', '', ev.people||'', '', '', '', '', '', '', '', '', ''];
       const c = itineraryContact(ev);
       const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':'', ev.visitPhoto?'攝影團隊':''].filter(Boolean).join('、');
       const committee = ev.visitCommittee ? (ev.visitCommitteeName || '委員') : '';
@@ -4601,7 +4615,7 @@ async function exportItineraryXlsx(){
       return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.category, ev.schoolName, courseOutline(ev.content), ev.content||'',
         ev.instructor||'', ev.location||'', ev.visitConfirmed?'確定':(ev.visitPlanned?'預計':''), helpers, committee,
         n ? `第 ${n} 次` : '', c.teacher, c.phone, photoText(ev),
-        ev.photoStatus==='confirmed'?(ev.photoCrew||''):'', ev.photoStatus==='confirmed'?(ev.photoMeetTime||''):'', ev.photoStatus==='confirmed'?(ev.photoMeetPlace||''):''];
+        ev.photoStatus==='confirmed'?(ev.photoCrew||''):'', ev.photoStatus==='confirmed'?(ev.photoCrewPhone||''):'', ev.photoStatus==='confirmed'?(ev.photoMeetTime||''):'', ev.photoStatus==='confirmed'?(ev.photoMeetPlace||''):''];
     });
 
     // 2) 全部課程行程
@@ -4672,7 +4686,7 @@ function dbRowToSession(r){
     studentGrades: r.student_grades||[], location: r.location||'', content: r.content||'',
     visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
     visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
-    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', visitPhoto: r.visit_photo||false, photoStatus: r.photo_status||'', photoCrew: r.photo_crew||'', photoMeetTime: r.photo_meet_time||'', photoMeetPlace: r.photo_meet_place||'', photoNote: r.photo_note||'', locked: r.locked||false,
+    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', visitPhoto: r.visit_photo||false, photoStatus: r.photo_status||'', photoCrew: r.photo_crew||'', photoCrewPhone: r.photo_crew_phone||'', photoMeetTime: r.photo_meet_time||'', photoMeetPlace: r.photo_meet_place||'', photoNote: r.photo_note||'', locked: r.locked||false,
     countedHours: (r.counted_hours===null || r.counted_hours===undefined) ? null : Number(r.counted_hours),
     checkNote: r.check_note || ''
   };
