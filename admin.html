@@ -4182,6 +4182,8 @@ const MARK_COLORS = ['#E5484D','#2F7FD8','#1E9E6A','#E88A1A','#8E5BD8','#D6409F'
 let markedSchools = [];
 let markOnly = false;
 const PLANNED_MARK = '__planned__';   // 特別標記：所有勾「訪視預計」的場次
+const PHOTO_MARK = '__photo10__';     // 特別標記：拍攝 10 校（已選滿 2 場的學校只標那 2 場）
+function photoMarkMatch(ev){ return isPhotoSchool(ev.schoolId) && (photoPickedCount(ev.schoolId) < PHOTO_PER_SCHOOL || isPhotoPicked(ev) || ev.photoStatus==='confirmed'); }
 try { markedSchools = JSON.parse(localStorage.getItem(MARKED_SCHOOLS_KEY) || '[]'); if(!Array.isArray(markedSchools)) markedSchools = []; } catch(e) { markedSchools = []; }
 function saveMarkedSchools(){ try { localStorage.setItem(MARKED_SCHOOLS_KEY, JSON.stringify(markedSchools)); } catch(e) {} }
 function markColorOf(id){
@@ -4190,11 +4192,12 @@ function markColorOf(id){
   const c = MARK_COLORS[i % MARK_COLORS.length];
   return { c, bg: c + '14' };
 }
-function markMatches(id, ev){ return id === PLANNED_MARK ? !!ev.visitPlanned : ev.schoolId === id; }
+function markMatches(id, ev){ return id === PLANNED_MARK ? !!ev.visitPlanned : id === PHOTO_MARK ? photoMarkMatch(ev) : ev.schoolId === id; }
 function evMark(ev){   // 這一場有沒有被標記（學校標記優先，其次是「訪視預計」）
   const m = markColorOf(ev.schoolId);
   if(m) return m;
-  if(ev.visitPlanned) return markColorOf(PLANNED_MARK);
+  if(ev.visitPlanned && markColorOf(PLANNED_MARK)) return markColorOf(PLANNED_MARK);
+  if(markColorOf(PHOTO_MARK) && photoMarkMatch(ev)) return markColorOf(PHOTO_MARK);
   return null;
 }
 function markStyleAttr(ev){
@@ -4204,16 +4207,17 @@ function markStyleAttr(ev){
 function renderMarkSchoolRow(){
   const el = $('#markSchoolRow');
   if(!el) return;
-  markedSchools = markedSchools.filter(id => id === PLANNED_MARK || DATA.schools.some(s=>s.id===id));
+  markedSchools = markedSchools.filter(id => id === PLANNED_MARK || id === PHOTO_MARK || DATA.schools.some(s=>s.id===id));
   const all = getAllEvents().filter(matchesBaseFilter);
   let html = `<span class="vf-label">★ 標記學校：</span>`;
   markedSchools.forEach(id=>{
     const m = markColorOf(id);
     const n = all.filter(ev=>markMatches(id, ev)).length;
-    const name = id === PLANNED_MARK ? '訪視預計' : DATA.schools.find(s=>s.id===id).name;
+    const name = id === PLANNED_MARK ? '訪視預計' : id === PHOTO_MARK ? '📷 拍攝 10 校' : DATA.schools.find(s=>s.id===id).name;
     html += `<span class="mark-chip" style="--mk:${m.c};--mk-bg:${m.bg};">★ ${escapeHtml(name)}<span class="mk-count">${n}場</span><button type="button" data-unmark="${escapeHtml(id)}" title="取消標記">✕</button></span>`;
   });
-  const plannedOpt = markedSchools.includes(PLANNED_MARK) ? '' : `<option value="${PLANNED_MARK}">◇ 訪視預計（標出預計要去的場次）</option>`;
+  const plannedOpt = (markedSchools.includes(PLANNED_MARK) ? '' : `<option value="${PLANNED_MARK}">◇ 訪視預計（標出預計要去的場次）</option>`)
+    + ((PHOTO_MODE || markedSchools.includes(PHOTO_MARK)) ? '' : `<option value="${PHOTO_MARK}">📷 拍攝 10 校（選滿 2 場的只標那 2 場）</option>`);
   const opts = DATA.schools.filter(s=>!markedSchools.includes(s.id))
     .map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.id.replace('school-',''))} ${escapeHtml(s.name)}</option>`).join('');
   html += `<select class="mark-select" id="markSchoolSelect"><option value="">＋ 選一間學校來標記</option>${plannedOpt}${opts}</select>`;
