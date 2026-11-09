@@ -756,6 +756,7 @@ input, select, textarea{min-width:0; max-width:100%;}
   .pb-stat-bar{height:8px; border-radius:99px; background:#F3E3D6; margin:10px auto 0; max-width:360px; overflow:hidden;}
   .pb-stat-bar span{display:block; height:100%; width:0; background:linear-gradient(90deg,#F0A36B,#1E8A4C); border-radius:99px; transition:width .3s;}
   .cat-filter-btn.photo-schools-btn{margin-left:10px; --cf-bg:#FFE6D3; --cf-fg:#B4561F;}
+  .cat-filter-btn.photo-full-btn{--cf-bg:#E6F4EA; --cf-fg:#1E8A4C; font-size:11.5px; padding:4px 10px;}
   .pb-contact{background:#FFF6EF; border:1px solid #F3D5BF; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:15px; color:#7A3E14;}
   .pb-contact a{color:#B4561F; font-weight:800; text-decoration:none; font-size:16px;}
   .chip-photo{font-size:10.5px; font-weight:700; margin-top:1px;}
@@ -3005,7 +3006,12 @@ function photoPickedCount(schoolId){
 function isPhotoPicked(ev){ return ev.photoStatus==='confirmed' || (ev.visitPhoto && ev.photoStatus!=='unable'); }
 // 攝影頁要隱藏的課：已過的日期、或這間學校已經確定滿 2 場（自己是確定的那場不隱藏）
 function photoHidden(ev){
-  if(!PHOTO_MODE || !isPhotoSchool(ev.schoolId)) return false;
+  if(!isPhotoSchool(ev.schoolId)) return false;
+  // 總覽頁：只有開「📷 拍攝 10 校」篩選時，已排定 2 堂的學校只留那 2 堂（不隱藏過去日期）
+  if(!PHOTO_MODE){
+    if(!photoSchoolsOnly || isPhotoPicked(ev) || ev.photoStatus==='confirmed') return false;
+    return photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
+  }
   if(isPhotoPicked(ev) && !(ev.date && ev.date < todayDateKey() && ev.photoStatus!=='confirmed')) return false;
   if(ev.photoStatus==='confirmed') return false;
   if(ev.date && ev.date < todayDateKey()) return true;
@@ -3029,21 +3035,22 @@ function renderPhotoPanel(){
     const sc = DATA.schools.find(s=>s.id===id); if(!sc) return;
     const c = (sc.sessions||[]).filter(x=>x.photoStatus==='confirmed');
     const d = c.filter(x=>x.photoDone).length;
-    const full = c.length >= PHOTO_PER_SCHOOL;
+    const picked = photoPickedCount(id);
+    const full = picked >= PHOTO_PER_SCHOOL;
     const vchk = PHOTO_MODE ? (sc.videoDone ? '<span class="pp-video on">🎬 影片完成</span>' : '<span class="pp-video">🎬 影片未完成</span>')
       : `<label class="pp-video ${sc.videoDone?'on':''}"><input type="checkbox" class="pp-video-chk" data-school-id="${id}" ${sc.videoDone?'checked':''}>🎬 影片完成</label>`;
     html += `<div class="pp-school ${full?'full':''} ${curSchool===sc.name?'active':''}" data-name="${escapeHtml(sc.name)}">
       <div class="pp-name">${escapeHtml(PHOTO_SHORT[id]||sc.name)}${full?' ✓':''}</div>
-      <div class="pp-nums">確定 <b>${c.length}/${PHOTO_PER_SCHOOL}</b>・完成 <b>${d}/${PHOTO_PER_SCHOOL}</b></div>${vchk}</div>`;
+      <div class="pp-nums">已選 <b>${picked}/${PHOTO_PER_SCHOOL}</b>・確定 <b>${c.length}</b>・完成 <b>${d}</b></div>${vchk}</div>`;
   });
   html += `<div class="pp-school pp-highlight">
       <div class="pp-name">✨ 全計畫精華</div><div class="pp-nums">第 11 支影片</div>
       ${PHOTO_MODE ? (DATA.highlightDone?'<span class="pp-video on">🎬 影片完成</span>':'<span class="pp-video">🎬 影片未完成</span>')
         : `<label class="pp-video ${DATA.highlightDone?'on':''}"><input type="checkbox" class="pp-highlight-chk" ${DATA.highlightDone?'checked':''}>🎬 影片完成</label>`}</div>`;
   html += `</div>`;
-  if(PHOTO_MODE){
+  if(PHOTO_MODE || photoSchoolsOnly){
     const nHidden = getAllEvents().filter(ev=>matchesBaseFilter(ev) && photoHidden(ev)).length;
-    html += `<div class="pp-foot">一間學校已排定 2 場（計畫端勾「攝影」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏；已經過去的日期也會隱藏。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
+    html += `<div class="pp-foot">${PHOTO_MODE?'':'📷 拍攝 10 校篩選中：'}一間學校已排定 2 場（計畫端勾「攝影」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏${PHOTO_MODE?'；已經過去的日期也會隱藏':''}。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
   }
   el.innerHTML = html;
   // 點學校：篩出那間（再點一次取消）
@@ -3687,6 +3694,7 @@ function renderVisitFilterRow(){
 
 // 類別篩選按鈕：跟上方「篩選條件」的類別下拉選單是同一個篩選，按鈕上的數字＝其他篩選條件下各類別的場次數
 let photoSchoolsOnly = false;   // 類別篩選：只看拍攝 10 校
+let showFullPhotoSchools = false;   // 拍攝 10 校篩選時，是否也顯示已選滿 2 場的學校
 function renderCategoryFilterRow(){
   const el = $('#categoryFilterRow');
   if(!el) return;
@@ -3699,8 +3707,12 @@ function renderCategoryFilterRow(){
     if(activeVisitFilter && !ev[activeVisitFilter]) return false;
     return true;
   });
-  const nPhoto = base.filter(ev=>isPhotoSchool(ev.schoolId) && (!cur || ev.category===cur)).length;
-  const photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（可以和類別一起用）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
+  const fullIds = PHOTO_SCHOOL_IDS.filter(id=>photoPickedCount(id) >= PHOTO_PER_SCHOOL);
+  const nPhoto = base.filter(ev=>isPhotoSchool(ev.schoolId) && (!cur || ev.category===cur) && (showFullPhotoSchools || !fullIds.includes(ev.schoolId))).length;
+  let photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（已選滿 2 場「攝影」的學校會先隱藏）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
+  if(!PHOTO_MODE && photoSchoolsOnly && fullIds.length){
+    photoBtn += `<button type="button" class="cat-filter-btn photo-full-btn${showFullPhotoSchools?' active':''}" title="${escapeHtml(fullIds.map(id=>PHOTO_SHORT[id]).join('、'))}">${showFullPhotoSchools?'✓ ':''}含已選滿的 ${fullIds.length} 校（只列選好的 2 堂）</button>`;
+  }
   let html = `<span class="vf-label">類別篩選：</span>` +
     `<button type="button" class="cat-filter-btn${cur===''?' active':''}" data-cat="">全部<span class="vf-count">${base.length}</span></button>`;
   Object.keys(CATEGORY_COLORS).forEach(cat=>{
@@ -3711,6 +3723,8 @@ function renderCategoryFilterRow(){
   el.innerHTML = html;
   const pbtn = el.querySelector('.photo-schools-btn');
   if(pbtn) pbtn.addEventListener('click', ()=>{ photoSchoolsOnly = !photoSchoolsOnly; renderAdmin(); });
+  const fbtn = el.querySelector('.photo-full-btn');
+  if(fbtn) fbtn.addEventListener('click', ()=>{ showFullPhotoSchools = !showFullPhotoSchools; renderAdmin(); });
   el.querySelectorAll('.cat-filter-btn[data-cat]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const sel = $('#categoryFilter');
@@ -3796,7 +3810,7 @@ function matchesFilter(ev){
   if(!matchesBaseFilter(ev)) return false;
   if(activeVisitFilter && !ev[activeVisitFilter]) return false;
   if(markOnly && markedSchools.length && !evMark(ev)) return false;
-  if(PHOTO_MODE && !showHiddenPhoto && photoHidden(ev)) return false;
+  if(!showHiddenPhoto && photoHidden(ev)) return false;
   return true;
 }
 
@@ -3807,6 +3821,7 @@ function matchesBaseFilter(ev){
   const category = $('#categoryFilter').value;
   if(category && ev.category !== category) return false;
   if(photoSchoolsOnly && !isPhotoSchool(ev.schoolId)) return false;
+  if(photoSchoolsOnly && !showFullPhotoSchools && photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL) return false;   // 已選滿 2 場的學校先藏起來
   const semester = $('#semesterFilter').value;
   if(semester && normalizeSemester(ev.semester) !== semester) return false;
   return true;
@@ -4085,7 +4100,8 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
   if(activeView==='cal') syncAdminCalToMonthFilter();
   renderVisitFilterRow();
   if(activeVisitFilter || field==='visitConfirmed' || (field==='visitPlanned' && markedSchools.includes(PLANNED_MARK))) renderListView();
-  if(field==='visitPlanned') renderMarkSchoolRow();   // 篩選中取消勾選時該列即時消失；訪視確定變動時菱形次序即時更新
+  if(field==='visitPlanned') renderMarkSchoolRow();
+  if(field==='visitPhoto'){ renderPhotoPanel(); if(photoSchoolsOnly) renderAdmin(); }   // 篩選中取消勾選時該列即時消失；訪視確定變動時菱形次序即時更新
 
   try{
     await updateSession(session.id, patch);
