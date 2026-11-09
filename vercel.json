@@ -1,7 +1,20 @@
 {
   "rewrites": [
-    { "source": "/fill/:schoolId", "destination": "/fill.html" },
-    { "source": "/admin",          "destination": "/admin.html" },
-    { "source": "/",               "destination": "/index.html" }
+    {
+      "source": "/fill/:schoolId",
+      "destination": "/fill.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
+    },
+    {
+      "source": "/photo",
+      "destination": "/photo.html"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
   ]
 }

@@ -696,7 +696,7 @@ input, select, textarea{min-width:0; max-width:100%;}
   table.list-table{table-layout:fixed; width:100%;}
   table.list-table col.c-when{width:118px;} table.list-table col.c-school{width:22%;}
   table.list-table col.c-people{width:15%;} table.list-table col.c-course{width:auto;}
-  table.list-table col.c-place{width:13%;} table.list-table col.c-visit{width:168px;}
+  table.list-table col.c-place{width:13%;} table.list-table col.c-visit{width:186px;}
   table.list-table tbody td{padding:14px 12px; vertical-align:top; line-height:1.5; overflow-wrap:anywhere;}
   .lt-date{font-weight:700; color:var(--ink); white-space:nowrap; font-size:13.5px;}
   .lt-dow{font-weight:500; color:var(--ink-faint); margin-left:2px;}
@@ -727,6 +727,26 @@ input, select, textarea{min-width:0; max-width:100%;}
     table.list-table .lt-sem{display:inline; margin-left:6px;}
     table.list-table .lt-school .school-link{white-space:normal;}
   }
+
+  /* ---------- 攝影團隊：拍攝確定／拍攝無法 ---------- */
+  .photo-box{margin-top:8px; padding:8px 9px; border-radius:9px; background:#FFF6EF; border:1px solid #F3D5BF;}
+  .photo-box.st-confirmed{background:#EEF8F1; border-color:#BFE3CB;}
+  .photo-box.st-unable{background:#FDEEEE; border-color:#F2C4C4;}
+  .photo-box .pb-title{font-size:11.5px; font-weight:800; color:#B4561F; margin-bottom:4px;}
+  .photo-box.st-confirmed .pb-title{color:#1E8A4C;} .photo-box.st-unable .pb-title{color:#C0392B;}
+  .photo-box .pb-checks{display:grid; grid-template-columns:auto auto; column-gap:8px; row-gap:2px; justify-content:start;}
+  .photo-box .pb-checks label{min-height:0 !important; font-size:12px !important;}
+  .photo-box .pb-checks label{padding:0 !important; line-height:1.4; height:auto; display:inline-flex; align-items:center; gap:4px; font-size:12.5px; font-weight:600; cursor:pointer; margin:0 !important; white-space:nowrap;}
+  .photo-box .pb-checks input{width:15px; height:15px; margin:0; cursor:pointer;}
+  .photo-box .pb-checks input.pb-ok{accent-color:#1E8A4C;} .photo-box .pb-checks input.pb-no{accent-color:#C0392B;}
+  .photo-box .pb-fields{display:grid; grid-template-columns:auto 1fr; gap:4px 6px; align-items:center; margin-top:6px;}
+  .photo-box .pb-fields span{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
+  .photo-box .pb-fields input{width:100%; box-sizing:border-box; font-size:12px; padding:3px 7px; margin:0; border:1px solid #DADBE0; border-radius:6px; background:#fff; height:auto; font-family:inherit;}
+  .photo-box input:disabled{cursor:default;}
+  .visit-check-group.readonly .visit-check-item{cursor:default; opacity:.9;}
+  .photo-mode-hide{display:none !important;}
+  .chip-photo{font-size:10.5px; font-weight:700; margin-top:1px;}
+  .chip-photo.ok{color:#1E8A4C;} .chip-photo.no{color:#C0392B;} .chip-photo.wait{color:#B4561F;}
 </style>
 <title>總覽彙整 — 藝師藝有計畫 115學年度</title>
 </head>
@@ -2867,6 +2887,8 @@ async function _commitSaveSchoolInner(school){
       visitEnjia: !!existing.visitEnjia,
       visitCommittee: !!existing.visitCommittee,
       visitPhoto: !!existing.visitPhoto,
+      photoStatus: existing.photoStatus||'', photoCrew: existing.photoCrew||'', photoMeetTime: existing.photoMeetTime||'',
+      photoMeetPlace: existing.photoMeetPlace||'', photoNote: existing.photoNote||'',
       locked: true
     };
   }).filter(s=>{
@@ -2904,6 +2926,60 @@ async function _commitSaveSchoolInner(school){
 
 /* ---------------- admin: data helpers ---------------- */
 
+/* ---------------- 攝影團隊頁（/photo）＋拍攝確定／拍攝無法 ---------------- */
+const PHOTO_MODE = !SCHOOL_ID && /^\/photo/.test(location.pathname);
+// 115學年度拍攝的 10 間學校（攝影團隊頁只顯示這 10 校）
+const PHOTO_SCHOOL_IDS = ['school-04','school-13','school-16','school-17','school-20','school-21','school-25','school-29','school-30','school-32'];
+function isPhotoSchool(id){ return PHOTO_SCHOOL_IDS.includes(id); }
+function photoBoxHTML(ev){
+  if(!isPhotoSchool(ev.schoolId)) return '';
+  const st = ev.photoStatus || '';
+  if(!PHOTO_MODE && !st && !ev.visitPhoto) return '';   // 總覽頁：有勾「攝影」或攝影團隊回覆過才顯示
+  const ids = `data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}"`;
+  const title = st==='confirmed' ? '📷 拍攝確定' : st==='unable' ? '📷 拍攝無法' : (ev.visitPhoto ? '📷 計畫端希望拍攝・待回覆' : '📷 拍攝');
+  const f = (field, label, ph) => `<span>${label}</span><input type="text" class="pb-input" data-pfield="${field}" ${ids} placeholder="${ph}" value="${escapeHtml(ev[field]||'')}">`;
+  let fields = '';
+  if(st==='confirmed') fields = `<div class="pb-fields">${f('photoCrew','攝影師','姓名')}${f('photoMeetTime','集合時間','例：08:15')}${f('photoMeetPlace','集合地點','例：捷運站1號出口')}</div>`;
+  else if(st==='unable') fields = `<div class="pb-fields">${f('photoNote','原因','（可不填）')}</div>`;
+  return `<div class="photo-box ${st?'st-'+st:''}">
+    <div class="pb-title">${title}</div>
+    <div class="pb-checks">
+      <label><input type="checkbox" class="pb-ok" data-pstatus="confirmed" ${ids} ${st==='confirmed'?'checked':''}>拍攝確定</label>
+      <label><input type="checkbox" class="pb-no" data-pstatus="unable" ${ids} ${st==='unable'?'checked':''}>拍攝無法</label>
+    </div>${fields}</div>`;
+}
+function chipPhotoHTML(ev){
+  if(ev.photoStatus==='confirmed') return `<div class="chip-photo ok">📷 拍攝確定${ev.photoCrew?' '+escapeHtml(ev.photoCrew):''}${ev.photoMeetTime?' '+escapeHtml(ev.photoMeetTime)+'集合':''}</div>`;
+  if(ev.photoStatus==='unable') return `<div class="chip-photo no">📷 拍攝無法</div>`;
+  if(ev.visitPhoto) return `<div class="chip-photo wait">📷 待回覆</div>`;
+  return '';
+}
+const PHOTO_DB_COLUMN = { photoStatus:'photo_status', photoCrew:'photo_crew', photoMeetTime:'photo_meet_time', photoMeetPlace:'photo_meet_place', photoNote:'photo_note' };
+function photoText(ev){
+  if(ev.photoStatus==='confirmed') return '拍攝確定';
+  if(ev.photoStatus==='unable') return '拍攝無法' + (ev.photoNote?`（${ev.photoNote}）`:'');
+  return ev.visitPhoto ? '待回覆' : '';
+}
+
+if(PHOTO_MODE){
+  document.title = '攝影團隊行程 — 藝師藝有計畫 115學年度';
+  const brand = document.querySelector('.top-bar .brand');
+  if(brand) brand.textContent = '教育部 · 藝師藝有計畫 115學年度 · 攝影團隊行程（10 校）';
+  ['.stat-row','#changeLogCard','#colorLegend'].forEach(sel=>{ const el=document.querySelector(sel); if(el) el.classList.add('photo-mode-hide'); });
+  const gb = document.querySelector('#goToSchoolFillBtn'); if(gb && gb.closest('.field')) gb.closest('.field').classList.add('photo-mode-hide');
+  const ex = document.querySelector('#exportAllCsvBtn'); if(ex && ex.closest('.card')) ex.closest('.card').classList.add('photo-mode-hide');
+  // 不讓攝影團隊點進學校填表頁
+  document.addEventListener('click', e=>{ const a = e.target.closest && e.target.closest('a[href^="/fill/"]'); if(a){ e.preventDefault(); } }, true);
+  const st = document.createElement('style'); st.textContent = 'a[href^="/fill/"]{cursor:default; pointer-events:none;}'; document.head.appendChild(st);
+  const help = document.createElement('div');
+  help.className = 'card';
+  help.innerHTML = `<div class="card-title">📷 攝影團隊請看這裡</div>
+    <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 10 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
+    每堂課右下角的橘色框：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。填寫的內容會即時同步給計畫端。</p>`;
+  const content = document.querySelector('#content');
+  if(content) content.insertBefore(help, content.firstChild);
+}
+
 function getAllEvents(){
   const events = [];
   DATA.schools.forEach(school=>{
@@ -2934,7 +3010,9 @@ function getAllEvents(){
         visitEnjia: !!sess.visitEnjia,
         visitCommittee: !!sess.visitCommittee,
         visitCommitteeName: sess.visitCommitteeName || '',
-        visitPhoto: !!sess.visitPhoto
+        visitPhoto: !!sess.visitPhoto,
+        photoStatus: sess.photoStatus || '', photoCrew: sess.photoCrew || '', photoMeetTime: sess.photoMeetTime || '',
+        photoMeetPlace: sess.photoMeetPlace || '', photoNote: sess.photoNote || ''
       });
     });
   });
@@ -3025,7 +3103,7 @@ function buildSchoolOptionsHTML(category, opts){
   const groups = getRegionGroupedSchools(category);
   let html = `<option value="">${escapeHtml(opts.allLabel || '請選擇…')}</option>`;
   REGION_ORDER.forEach(region=>{
-    const list = groups[region];
+    const list = (groups[region]||[]).filter(s=>!PHOTO_MODE || DATA.schools.some(sc=>sc.name===s.name));
     if(!list || list.length===0) return;
     html += `<optgroup label="${escapeHtml(region)}">`;
     list.forEach(s=>{
@@ -3238,15 +3316,16 @@ function scheduleVisitSave(){
 }
 
 function visitCheckboxesHTML(ev){
-  return `<div class="visit-check-group">` + VISIT_FLAGS.map(f=>{
-    const checked = ev[f.field] ? 'checked' : '';
+  const ro = PHOTO_MODE ? 'disabled' : '';
+  return `<div class="visit-check-group${PHOTO_MODE?' readonly':''}">` + VISIT_FLAGS.map(f=>{
+    const checked = (ev[f.field] ? 'checked' : '') + (ro ? ' disabled' : '');
     let html = `<label class="visit-check-item" style="--vc-color:${f.color};">
       <input type="checkbox" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" data-field="${f.field}" ${checked}>
       <span>${f.label}</span>
     </label>`;
     // 打勾「委員」後，旁邊出現可輸入委員姓名的欄位
     if(f.field==='visitCommittee'){
-      html += `<input type="text" class="committee-name-input" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" placeholder="委員姓名" value="${escapeHtml(ev.visitCommitteeName||'')}" style="${ev.visitCommittee?'':'display:none;'}">`;
+      html += `<input type="text" class="committee-name-input" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" placeholder="委員姓名" value="${escapeHtml(ev.visitCommitteeName||'')}" ${ro?'readonly':''} style="${ev.visitCommittee?'':'display:none;'}">`;
     }
     return html;
   }).join('') + `</div>`;
@@ -3268,8 +3347,8 @@ function chipPeopleHTML(ev){
   if(ev.visitSuyu) who.push('素瑜');
   if(ev.visitEnjia) who.push('恩嘉');
   if(ev.visitCommittee) who.push(ev.visitCommitteeName ? `委員 ${ev.visitCommitteeName}` : '委員');
-  if(ev.visitPhoto) who.push('📷攝影');
-  return who.length ? `<div class="chip-people">${escapeHtml(who.join('・'))}</div>` : '';
+  const ph = chipPhotoHTML(ev);
+  return (who.length ? `<div class="chip-people">${escapeHtml(who.join('・'))}</div>` : '') + ph;
 }
 function chipTooltip(ev, visitNums){
   let t = `${ev.schoolName}（${ev.category||''}）`;
@@ -3521,7 +3600,7 @@ function buildSchoolOptionsWithHoursHTML(category){
   const groups = getRegionGroupedSchools(category);
   let html = `<option value="">全部學校</option>`;
   REGION_ORDER.forEach(region=>{
-    const list = groups[region];
+    const list = (groups[region]||[]).filter(s=>!PHOTO_MODE || DATA.schools.some(sc=>sc.name===s.name));
     if(!list || list.length===0) return;
     html += `<optgroup label="${escapeHtml(region)}">`;
     list.forEach(s=>{
@@ -3639,11 +3718,11 @@ function renderListView(){
     const sc = schoolColor(ev.schoolName, ev.category);
     tr.innerHTML = `
       <td data-label="日期／時間">${evMark(ev) ? '<span class="mark-star">★</span>' : ''}<span class="lt-date">${ltDate(ev.date)}</span><div class="lt-time">${(ev.startTime||ev.endTime) ? `${ev.startTime||'–'}–${ev.endTime||'–'}` : '時間未填'}</div>${ev.checkNote ? `<div class="check-note">⚠️ ${escapeHtml(ev.checkNote)}<button type="button" class="check-note-clear" data-school-id="${escapeHtml(ev.schoolId)}" data-session-id="${escapeHtml(ev.sessionId)}" title="已經跟學校確認好，移除這個提醒">✕ 已確認</button></div>` : ''}</td>
-      <td data-label="學校" class="lt-school">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${sc.bg};color:${sc.fg};" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)}&nbsp;↗</a><span class="lt-sem">${escapeHtml(normalizeSemester(ev.semester)||ev.semester||'')}</span></td>
+      <td data-label="學校" class="lt-school">${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="badge school-link" style="background:${sc.bg};color:${sc.fg};" title="開新分頁前往這所學校的填表頁">${escapeHtml(ev.schoolName)}${PHOTO_MODE?'':'&nbsp;↗'}</a><span class="lt-sem">${escapeHtml(normalizeSemester(ev.semester)||ev.semester||'')}</span></td>
       <td data-label="藝師／隨課"><div class="lt-person"><span class="lt-k">藝師</span>${ev.instructor?escapeHtml(ev.instructor):'<span class="lt-empty">未填</span>'}</div><div class="lt-person"><span class="lt-k">隨課</span>${ev.companionTeacher?escapeHtml(ev.companionTeacher):'<span class="lt-empty">未填</span>'}</div></td>
       <td data-label="課程">${courseCellHTML(ev.content)}</td>
       <td data-label="地點"><div class="lt-place">${escapeHtml(ev.location||'')}</div></td>
-      <td data-label="訪視標記">${visitCheckboxesHTML(ev)}</td>
+      <td data-label="訪視標記">${visitCheckboxesHTML(ev)}${photoBoxHTML(ev)}</td>
     `;
     tr.dataset.week = wk;
     if(collapsedWeeks.has(wk)) tr.classList.add('week-row-hidden');
@@ -3747,6 +3826,44 @@ $('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
 $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
   const t = e.target;
   if(!t.matches) return;
+
+  // --- 拍攝確定／拍攝無法（兩個只能選一個）---
+  if(t.matches('input[data-pstatus]')){
+    const session = findSessionByDataset(t);
+    if(!session) return;
+    const prev = session.photoStatus || '';
+    const next = t.checked ? t.dataset.pstatus : '';
+    session.photoStatus = next;
+    renderListView();
+    if(activeView==='cal') syncAdminCalToMonthFilter();
+    try{
+      await updateSession(session.id, { photo_status: next });
+      showToast(next==='confirmed' ? '✓ 已設為拍攝確定，請填攝影師與集合時間' : next==='unable' ? '✓ 已設為拍攝無法' : '✓ 已取消');
+    }catch(err){
+      session.photoStatus = prev; renderListView();
+      showToast('⚠️ 儲存失敗（請確認已執行 38 號 SQL）：'+err.message);
+    }
+    return;
+  }
+  // --- 攝影師／集合時間／集合地點／原因 ---
+  if(t.matches('input.pb-input')){
+    const session = findSessionByDataset(t);
+    if(!session) return;
+    const field = t.dataset.pfield;
+    const prev = session[field] || '';
+    const val = t.value.trim();
+    if(val === prev) return;
+    session[field] = val;
+    try{
+      await updateSession(session.id, { [PHOTO_DB_COLUMN[field]]: val });
+      showToast('✓ 已儲存');
+      if(activeView==='cal') syncAdminCalToMonthFilter();
+    }catch(err){
+      session[field] = prev; t.value = prev;
+      showToast('⚠️ 儲存失敗：'+err.message);
+    }
+    return;
+  }
 
   // --- 委員姓名輸入 ---
   if(t.matches('input.committee-name-input')){
@@ -4220,7 +4337,7 @@ function renderMonthList(){
     return `<div class="ev-item${evMark(ev)?' marked':''}"${markStyleAttr(ev)}>
       <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
       <div class="ev-main">
-        ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)} ↗</a>
+        ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)}${PHOTO_MODE?'':' ↗'}</a>${chipPhotoHTML(ev)}
         <div class="meta" style="margin-top:2px;">
           <span style="color:var(--ink-soft);">隨課老師：</span>${escapeHtml(ev.companionTeacher||'（未填）')}
           <span style="margin:0 4px;color:var(--ink-faint);">｜</span>
@@ -4422,23 +4539,24 @@ async function exportItineraryXlsx(){
 
     // 1) 訪視行程：有任何訪視標記的場次
     const tripRows = (DATA.trips||[]).map(t=>Object.assign({ isTrip:true }, t));
-    const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee||ev.visitPhoto)
+    const visits = all.filter(ev=>ev.visitPlanned||ev.visitConfirmed||ev.visitSuyu||ev.visitEnjia||ev.visitCommittee||ev.visitPhoto||ev.photoStatus)
       .concat(tripRows).sort(itinerarySort);
     const tripTime = t => (t.startTime||t.endTime) ? `${t.startTime||''}-${t.endTime||''}` : '全天';
     addSheet('訪視行程', [
       ['日期',12,'center'],['星期',6,'center'],['時間',13,'center'],['類別',8,'center'],['學校',24],['課程大綱',26],['完整上課內容',50,'left','hidden'],
       ['授課藝師',14],['上課地點',18],['訪視狀態',10,'center'],['助理／攝影',14,'center'],['訪視委員',14],['第幾次訪視',10,'center'],
-      ['承辦人員',12],['聯絡電話',18]
+      ['承辦人員',12],['聯絡電話',18],['拍攝狀態',12,'center'],['攝影師',12],['集合時間',10,'center'],['集合地點',22]
     ], visits, ev=>{
       if(ev.isTrip) return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', tripTime(ev), TRIP_LABEL, ev.title||'', ev.note||'', ev.note||'',
-        '', ev.location||'', '', ev.people||'', '', '', '', ''];
+        '', ev.location||'', '', ev.people||'', '', '', '', '', '', '', '', ''];
       const c = itineraryContact(ev);
       const helpers = [ev.visitSuyu?'素瑜':'', ev.visitEnjia?'恩嘉':'', ev.visitPhoto?'攝影團隊':''].filter(Boolean).join('、');
       const committee = ev.visitCommittee ? (ev.visitCommitteeName || '委員') : '';
       const n = ev.visitConfirmed ? visitNums[ev.sessionId] : '';
       return [itineraryDateCell(ev.date), ev.date?weekdayZh(ev.date):'', timeOf(ev), ev.category, ev.schoolName, courseOutline(ev.content), ev.content||'',
         ev.instructor||'', ev.location||'', ev.visitConfirmed?'確定':(ev.visitPlanned?'預計':''), helpers, committee,
-        n ? `第 ${n} 次` : '', c.teacher, c.phone];
+        n ? `第 ${n} 次` : '', c.teacher, c.phone, photoText(ev),
+        ev.photoStatus==='confirmed'?(ev.photoCrew||''):'', ev.photoStatus==='confirmed'?(ev.photoMeetTime||''):'', ev.photoStatus==='confirmed'?(ev.photoMeetPlace||''):''];
     });
 
     // 2) 全部課程行程
@@ -4509,7 +4627,7 @@ function dbRowToSession(r){
     studentGrades: r.student_grades||[], location: r.location||'', content: r.content||'',
     visitPlanned: r.visit_planned||false, visitConfirmed: r.visit_confirmed||false,
     visitSuyu: r.visit_suyu||false, visitEnjia: r.visit_enjia||false,
-    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', visitPhoto: r.visit_photo||false, locked: r.locked||false,
+    visitCommittee: r.visit_committee||false, visitCommitteeName: r.visit_committee_name||'', visitPhoto: r.visit_photo||false, photoStatus: r.photo_status||'', photoCrew: r.photo_crew||'', photoMeetTime: r.photo_meet_time||'', photoMeetPlace: r.photo_meet_place||'', photoNote: r.photo_note||'', locked: r.locked||false,
     countedHours: (r.counted_hours===null || r.counted_hours===undefined) ? null : Number(r.counted_hours),
     checkNote: r.check_note || ''
   };
@@ -4541,6 +4659,7 @@ async function loadData(){
     const bySchool = {};
     (sessions||[]).forEach(s=>{ (bySchool[s.school_id]=bySchool[s.school_id]||[]).push(s); });
     DATA.schools = (schools||[]).map(sc => schoolRowToObj(sc, bySchool[sc.id]||[]));
+    if(PHOTO_MODE){ DATA.schools = DATA.schools.filter(sc=>isPhotoSchool(sc.id)); DATA.changeLog = []; DATA.trips = []; return; }
     try{
       const logs = await getChangeLogs(false);
       DATA.changeLog = (logs||[]).map(r=>({
