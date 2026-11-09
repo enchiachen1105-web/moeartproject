@@ -3431,7 +3431,8 @@ function shortSchoolName(n){
   return String(n||'').replace(/國民小學/g,'國小').replace(/國民中學/g,'國中');
 }
 function schoolColor(name, category){
-  return SCHOOL_COLORS[name] || {bg: CATEGORY_COLORS[category] || '#E6E2DC', fg: CATEGORY_TEXT[category] || '#2A2622'};
+  // 統一用類別顏色（音樂班／舞蹈班／美術班／普通班），不再每所學校各一色
+  return {bg: CATEGORY_COLORS[category] || '#E6E2DC', fg: CATEGORY_TEXT[category] || '#2A2622'};
 }
 function categoryTagHTML(category){
   if(!category) return '';
