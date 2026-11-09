@@ -2997,12 +2997,19 @@ function photoConfirmedCount(schoolId){
   const sc = DATA.schools.find(s=>s.id===schoolId);
   return sc ? (sc.sessions||[]).filter(x=>x.photoStatus==='confirmed').length : 0;
 }
+// 這間學校「已排定」的拍攝場次：攝影團隊勾了拍攝確定，或計畫端勾了「攝影」且攝影團隊沒說無法
+function photoPickedCount(schoolId){
+  const sc = DATA.schools.find(s=>s.id===schoolId);
+  return sc ? (sc.sessions||[]).filter(x=>x.photoStatus==='confirmed' || (x.visitPhoto && x.photoStatus!=='unable')).length : 0;
+}
+function isPhotoPicked(ev){ return ev.photoStatus==='confirmed' || (ev.visitPhoto && ev.photoStatus!=='unable'); }
 // 攝影頁要隱藏的課：已過的日期、或這間學校已經確定滿 2 場（自己是確定的那場不隱藏）
 function photoHidden(ev){
   if(!PHOTO_MODE || !isPhotoSchool(ev.schoolId)) return false;
+  if(isPhotoPicked(ev) && !(ev.date && ev.date < todayDateKey() && ev.photoStatus!=='confirmed')) return false;
   if(ev.photoStatus==='confirmed') return false;
   if(ev.date && ev.date < todayDateKey()) return true;
-  return photoConfirmedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
+  return photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
 }
 function photoStats(){
   let conf=0, done=0;
@@ -3036,7 +3043,7 @@ function renderPhotoPanel(){
   html += `</div>`;
   if(PHOTO_MODE){
     const nHidden = getAllEvents().filter(ev=>matchesBaseFilter(ev) && photoHidden(ev)).length;
-    html += `<div class="pp-foot">已排滿 2 場的學校、和已經過去的日期會自動隱藏。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
+    html += `<div class="pp-foot">一間學校已排定 2 場（計畫端勾「攝影」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏；已經過去的日期也會隱藏。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
   }
   el.innerHTML = html;
   // 點學校：篩出那間（再點一次取消）
@@ -3076,7 +3083,7 @@ function photoBoxHTML(ev){
       <div class="pb-checks">${noBox}</div></div>`;
   }
   const title = st==='confirmed' ? '📷 拍攝確定' : st==='unable' ? '📷 拍攝無法' : '📷 計畫端希望拍攝・待回覆';
-  const full = st!=='confirmed' && photoConfirmedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
+  const full = st!=='confirmed' && (photoConfirmedCount(ev.schoolId) >= PHOTO_PER_SCHOOL || (!isPhotoPicked(ev) && photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL));
   const doneHTML = st==='confirmed' ? (PHOTO_MODE
       ? (ev.photoDone ? '<div class="pb-done">✓ 已拍攝完成</div>' : '')
       : `<label class="pb-done"><input type="checkbox" class="pb-done-chk" ${ids} ${ev.photoDone?'checked':''}>已拍攝完成</label>`) : '';
@@ -3087,7 +3094,7 @@ function photoBoxHTML(ev){
     <div class="pb-checks">
       <label><input type="checkbox" class="pb-ok" data-pstatus="confirmed" ${ids} ${st==='confirmed'?'checked':''} ${full?'disabled':''}>拍攝確定</label>
       ${noBox}
-    </div>${full?'<div class="pb-full-note">這間學校已確定 2 場</div>':''}${fields}${doneHTML}</div>`;
+    </div>${full?'<div class="pb-full-note">這間學校已排定 2 場</div>':''}${fields}${doneHTML}</div>`;
 }
 function chipPhotoHTML(ev){
   if(ev.photoStatus==='confirmed') return `<div class="chip-photo ok">📷 拍攝確定${ev.photoCrew?' '+escapeHtml(ev.photoCrew):''}${ev.photoMeetTime?' '+escapeHtml(ev.photoMeetTime)+'集合':''}</div>`;
@@ -3120,7 +3127,7 @@ if(PHOTO_MODE){
     <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 10 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
     <b style="color:#B4561F;">橘色框</b>＝計畫端希望拍攝的場次：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、聯絡電話、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。<br>
     <b style="color:#9A9BA3;">灰色框</b>＝目前沒有排拍攝的場次，如果那天沒辦法拍，可以先勾「拍攝無法」。<br>
-    每間學校拍 <b>2 場</b>：一間學校確定滿 2 場後，那間的其他課會自動隱藏；已經過去的日期也會隱藏。填寫的內容會即時同步給計畫端。</p>`;
+    每間學校拍 <b>2 場</b>：計畫端已經選好（橘色框）或你們已確定滿 2 場後，那間的其他課會自動隱藏；已經過去的日期也會隱藏。填寫的內容會即時同步給計畫端。</p>`;
   const content = document.querySelector('#content');
   if(content) content.insertBefore(help, content.firstChild);
 }
