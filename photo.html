@@ -820,7 +820,7 @@ input, select, textarea{min-width:0; max-width:100%;}
       </div>
 
       <div class="card" id="photoPanelCard">
-        <div class="card-title">📷 拍攝與影片進度（10 校）<span style="font-weight:400;font-size:12px;color:var(--ink-faint);margin-left:8px;">點學校可篩出那間的課；「已拍攝完成」在每堂課的拍攝框裡勾</span></div>
+        <div class="card-title">📷 拍攝與影片進度（11 校）<span style="font-weight:400;font-size:12px;color:var(--ink-faint);margin-left:8px;">點學校可篩出那間的課；「已拍攝完成」在每堂課的拍攝框裡勾</span></div>
         <div id="photoPanel"></div>
       </div>
 
@@ -2992,8 +2992,8 @@ async function _commitSaveSchoolInner(school){
 /* ---------------- 攝影團隊頁（/photo）＋拍攝確定／拍攝無法 ---------------- */
 const PHOTO_MODE = !SCHOOL_ID && /^\/photo/.test(location.pathname);
 // 115學年度拍攝的 10 間學校（攝影團隊頁只顯示這 10 校）
-const PHOTO_SCHOOL_IDS = ['school-01','school-04','school-13','school-16','school-20','school-21','school-25','school-29','school-30','school-32'];   // 1109：林園國小改成大觀國小
-const PHOTO_TARGET = 20;   // 本學年需要攝影團隊跟拍的總次數（10 校 × 2 次）
+const PHOTO_SCHOOL_IDS = ['school-01','school-04','school-13','school-16','school-20','school-21','school-25','school-29','school-30','school-31','school-32'];   // 1117：加羅東國小   // 1109：林園國小改成大觀國小
+const PHOTO_TARGET = 20;   // 本學年需要攝影團隊跟拍的總次數（9 校 × 2 次＋力行、羅東各 1 次）
 function renderPhotoCount(){
   const el = document.getElementById('photoCountStat');
   if(!el) return;
@@ -3007,8 +3007,11 @@ function isPhotoSchool(id){ return PHOTO_SCHOOL_IDS.includes(id); }
 
 /* ---------- 拍攝與影片進度（攝影頁、總覽頁共用） ---------- */
 const PHOTO_SHORT = {'school-04':'瑞豐國小','school-13':'崇明國中','school-01':'大觀國小','school-16':'五福國小','school-20':'國風國中',
-  'school-21':'新生國小','school-25':'忠孝國小','school-29':'鹿江國中小','school-30':'力行國小','school-32':'中教大實小'};
-const PHOTO_PER_SCHOOL = 2, VIDEO_TARGET = 11;
+  'school-21':'新生國小','school-25':'忠孝國小','school-29':'鹿江國中小','school-30':'力行國小','school-31':'羅東國小','school-32':'中教大實小'};
+const PHOTO_PER_SCHOOL = 2, VIDEO_TARGET = PHOTO_SCHOOL_IDS.length + 1;   // 每校影片 1 支＋全計畫精華 1 支
+// 每校拍攝場數（預設 2 場；1117：力行、羅東各 1 場）
+const PHOTO_TARGET_BY_SCHOOL = {'school-30':1, 'school-31':1};
+function photoTargetOf(id){ return PHOTO_TARGET_BY_SCHOOL[id] || PHOTO_PER_SCHOOL; }
 let showHiddenPhoto = false;
 function photoConfirmedCount(schoolId){
   const sc = DATA.schools.find(s=>s.id===schoolId);
@@ -3026,12 +3029,12 @@ function photoHidden(ev){
   // 總覽頁：只有開「📷 拍攝 10 校」篩選時，已排定 2 堂的學校只留那 2 堂（不隱藏過去日期）
   if(!PHOTO_MODE){
     if(!photoSchoolsOnly || isPhotoPicked(ev) || ev.photoStatus==='confirmed') return false;
-    return photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
+    return photoPickedCount(ev.schoolId) >= photoTargetOf(ev.schoolId);
   }
   if(isPhotoPicked(ev) && !(ev.date && ev.date < todayDateKey() && ev.photoStatus!=='confirmed')) return false;
   if(ev.photoStatus==='confirmed') return false;
   if(ev.date && ev.date < todayDateKey()) return true;
-  return photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL;
+  return photoPickedCount(ev.schoolId) >= photoTargetOf(ev.schoolId);
 }
 function photoStats(){
   let conf=0, done=0;
@@ -3052,25 +3055,26 @@ function renderPhotoPanel(){
     const c = (sc.sessions||[]).filter(x=>x.photoStatus==='confirmed');
     const d = c.filter(x=>x.photoDone).length;
     const picked = photoPickedCount(id);
-    const full = picked >= PHOTO_PER_SCHOOL;
+    const tgt = photoTargetOf(id);
+    const full = picked >= tgt;
     const vchk = PHOTO_MODE ? (sc.videoDone ? '<span class="pp-video on">🎬 影片完成</span>' : '<span class="pp-video">🎬 影片未完成</span>')
       : `<label class="pp-video ${sc.videoDone?'on':''}"><input type="checkbox" class="pp-video-chk" data-school-id="${id}" ${sc.videoDone?'checked':''}>🎬 影片完成</label>`;
     // 階段：已選滿 2 堂＝藍框 → 確定 2 堂＝綠框 → 拍攝完成 2 堂＝整張綠底；影片完成＝右上角打勾
-    const stage = d >= PHOTO_PER_SCHOOL ? 's-shot' : c.length >= PHOTO_PER_SCHOOL ? 's-confirmed' : full ? 's-picked' : '';
+    const stage = d >= tgt ? 's-shot' : c.length >= tgt ? 's-confirmed' : full ? 's-picked' : '';
     html += `<div class="pp-school ${stage} ${sc.videoDone?'s-video':''} ${curSchool===sc.name?'active':''}" data-name="${escapeHtml(sc.name)}">
       ${sc.videoDone?'<span class="pp-check" title="影片完成">✓</span>':''}
       <div class="pp-name">${escapeHtml(PHOTO_SHORT[id]||sc.name)}</div>
-      <div class="pp-nums">已選 <b>${picked}/${PHOTO_PER_SCHOOL}</b>・確定 <b>${c.length}</b>・完成 <b>${d}</b></div>${vchk}</div>`;
+      <div class="pp-nums">已選 <b>${picked}/${tgt}</b>・確定 <b>${c.length}</b>・完成 <b>${d}</b></div>${vchk}</div>`;
   });
   html += `<div class="pp-school pp-highlight ${DATA.highlightDone?'s-video':''}">${DATA.highlightDone?'<span class="pp-check" title="影片完成">✓</span>':''}
-      <div class="pp-name">✨ 全計畫精華</div><div class="pp-nums">第 11 支影片</div>
+      <div class="pp-name">✨ 全計畫精華</div><div class="pp-nums">第 ${VIDEO_TARGET} 支影片</div>
       ${PHOTO_MODE ? (DATA.highlightDone?'<span class="pp-video on">🎬 影片完成</span>':'<span class="pp-video">🎬 影片未完成</span>')
         : `<label class="pp-video ${DATA.highlightDone?'on':''}"><input type="checkbox" class="pp-highlight-chk" ${DATA.highlightDone?'checked':''}>🎬 影片完成</label>`}</div>`;
   html += `</div>`;
   html += `<div class="pp-legend"><span class="lg lg-picked"></span>已選好 2 堂　<span class="lg lg-confirmed"></span>攝影團隊確定 2 堂　<span class="lg lg-shot"></span>2 堂都拍攝完成　<span class="pp-check sm">✓</span>影片完成</div>`;
   if(PHOTO_MODE || photoSchoolsOnly){
     const nHidden = getAllEvents().filter(ev=>matchesBaseFilter(ev) && photoHidden(ev)).length;
-    html += `<div class="pp-foot">${PHOTO_MODE?'':'📷 拍攝 10 校篩選中：'}一間學校已排定 2 場（計畫端勾「攝影預計」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏${PHOTO_MODE?'；已經過去的日期也會隱藏':''}。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 10 校</button>`:''}</div>`;
+    html += `<div class="pp-foot">${PHOTO_MODE?'':'📷 拍攝 11 校篩選中：'}一間學校排滿應拍場數（計畫端勾「攝影預計」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏${PHOTO_MODE?'；已經過去的日期也會隱藏':''}。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 11 校</button>`:''}</div>`;
   }
   el.innerHTML = html;
   // 點學校：篩出那間（再點一次取消）
@@ -3110,7 +3114,7 @@ function photoBoxHTML(ev){
       <div class="pb-checks">${noBox}</div></div>`;
   }
   const title = st==='confirmed' ? '📷 拍攝確定' : st==='unable' ? '📷 拍攝無法' : '📷 計畫端希望拍攝・待回覆';
-  const full = st!=='confirmed' && (photoConfirmedCount(ev.schoolId) >= PHOTO_PER_SCHOOL || (!isPhotoPicked(ev) && photoPickedCount(ev.schoolId) >= PHOTO_PER_SCHOOL));
+  const full = st!=='confirmed' && (photoConfirmedCount(ev.schoolId) >= photoTargetOf(ev.schoolId) || (!isPhotoPicked(ev) && photoPickedCount(ev.schoolId) >= photoTargetOf(ev.schoolId)));
   const doneHTML = st==='confirmed' ? (PHOTO_MODE
       ? (ev.photoDone ? '<div class="pb-done">✓ 已拍攝完成</div>' : '')
       : `<label class="pb-done"><input type="checkbox" class="pb-done-chk" ${ids} ${ev.photoDone?'checked':''}>已拍攝完成</label>`) : '';
@@ -3121,7 +3125,7 @@ function photoBoxHTML(ev){
     <div class="pb-checks">
       <label><input type="checkbox" class="pb-ok" data-pstatus="confirmed" ${ids} ${st==='confirmed'?'checked':''} ${full?'disabled':''}>拍攝確定</label>
       ${noBox}
-    </div>${full?'<div class="pb-full-note">這間學校已排定 2 場</div>':''}${fields}${doneHTML}</div>`;
+    </div>${full?`<div class="pb-full-note">這間學校已排定 ${photoTargetOf(ev.schoolId)} 場</div>`:''}${fields}${doneHTML}</div>`;
 }
 function chipPhotoHTML(ev){
   if(ev.photoStatus==='confirmed') return `<div class="chip-photo ok">📷 拍攝確定${ev.photoCrew?' '+escapeHtml(ev.photoCrew):''}${ev.photoMeetTime?' '+escapeHtml(ev.photoMeetTime)+'集合':''}</div>`;
@@ -3139,7 +3143,7 @@ function photoText(ev){
 if(PHOTO_MODE){
   document.title = '攝影團隊行程 — 藝師藝有計畫 115學年度';
   const brand = document.querySelector('.top-bar .brand');
-  if(brand) brand.textContent = '教育部 · 藝師藝有計畫 115學年度 · 攝影團隊行程（10 校）';
+  if(brand) brand.textContent = '教育部 · 藝師藝有計畫 115學年度 · 攝影團隊行程（11 校）';
   ['.stat-row','#changeLogCard','#colorLegend','#photoPanelCard'].forEach(sel=>{ const el=document.querySelector(sel); if(el) el.classList.add('photo-mode-hide'); });
   const gb = document.querySelector('#goToSchoolFillBtn'); if(gb && gb.closest('.field')) gb.closest('.field').classList.add('photo-mode-hide');
   const ex = document.querySelector('#exportAllCsvBtn'); if(ex && ex.closest('.card')) ex.closest('.card').classList.add('photo-mode-hide');
@@ -3151,10 +3155,10 @@ if(PHOTO_MODE){
   help.innerHTML = `<div id="photoPanel"></div>
     <div class="pb-contact" style="margin-top:14px;">📞 主要聯繫助理：<b>陳恩嘉</b>　<a href="tel:0910124562">0910-124-562</a></div>
     <div class="card-title">📷 攝影團隊請看這裡</div>
-    <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 10 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
+    <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 11 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
     <b style="color:#B4561F;">橘色框</b>＝計畫端希望拍攝的場次：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、聯絡電話、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。<br>
     <b style="color:#9A9BA3;">灰色框</b>＝目前沒有排拍攝的場次，如果那天沒辦法拍，可以先勾「拍攝無法」。<br>
-    每間學校拍 <b>2 場</b>：計畫端已經選好（橘色框）或你們已確定滿 2 場後，那間的其他課會自動隱藏；已經過去的日期也會隱藏。填寫的內容會即時同步給計畫端。</p>`;
+    每間學校拍 <b>2 場</b>（力行、羅東各 <b>1 場</b>）：計畫端已經選好（橘色框）或你們已確定滿應拍場數後，那間的其他課會自動隱藏；已經過去的日期也會隱藏。填寫的內容會即時同步給計畫端。</p>`;
   const content = document.querySelector('#content');
   if(content) content.insertBefore(help, content.firstChild);
 }
@@ -3551,7 +3555,7 @@ function renderLegend(){
     `<span class="legend-item"><span class="legend-dot" style="background:${f.color};"></span>${escapeHtml(f.label)}</span>`
   ).join('');
   el.innerHTML = `<strong style="font-weight:700;">類別標記：</strong>${categoryPart}` +
-    `<span class="legend-item"><span class="legend-photo-end"></span>拍攝 10 校</span>` +
+    `<span class="legend-item"><span class="legend-photo-end"></span>拍攝 11 校</span>` +
     `<span style="width:1px;height:14px;background:var(--border);display:inline-block;"></span>` +
     `<strong style="font-weight:700;">訪視標記：</strong>${flagPart}` +
     `<span style="width:1px;height:14px;background:var(--border);display:inline-block;"></span>` +
@@ -3729,9 +3733,9 @@ function renderCategoryFilterRow(){
     if(activeVisitFilter && !ev[activeVisitFilter]) return false;
     return true;
   });
-  const fullIds = PHOTO_SCHOOL_IDS.filter(id=>photoPickedCount(id) >= PHOTO_PER_SCHOOL);
+  const fullIds = PHOTO_SCHOOL_IDS.filter(id=>photoPickedCount(id) >= photoTargetOf(id));
   const nPhoto = base.filter(ev=>isPhotoSchool(ev.schoolId) && (!cur || ev.category===cur) && (!fullIds.includes(ev.schoolId) || isPhotoPicked(ev) || ev.photoStatus==='confirmed')).length;
-  let photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 10 間學校（已選滿 2 場「攝影預計」的學校只列選好的 2 場）">📷 拍攝 10 校<span class="vf-count">${nPhoto}</span></button>`;
+  let photoBtn = PHOTO_MODE ? '' : `<button type="button" class="cat-filter-btn photo-schools-btn${photoSchoolsOnly?' active':''}" title="只看 115 學年度拍攝的 11 間學校（已選滿應拍場數的學校只列選好的場次）">📷 拍攝 11 校<span class="vf-count">${nPhoto}</span></button>`;
   let html = `<span class="vf-label">類別篩選：</span>` +
     `<button type="button" class="cat-filter-btn${cur===''?' active':''}" data-cat="">全部<span class="vf-count">${base.length}</span></button>`;
   Object.keys(CATEGORY_COLORS).forEach(cat=>{
@@ -3862,8 +3866,14 @@ function renderListView(){
   let listTrips = getVisibleTrips();
   if(activeAdminMonthFilter !== 'all') listTrips = listTrips.filter(t=>t.date && t.date.startsWith(activeAdminMonthFilter));
   const tbody = $('#listTbody');
-  tbody.innerHTML = '';
   $('#listEmpty').style.display = (events.length===0 && listTrips.length===0) ? 'block' : 'none';
+  fillListTbody(tbody, events, listTrips);
+  if(activeView==='cal' && $('#monthListTbody')) renderMonthList();   // 月曆下方清單也同步
+}
+
+// 清單表格的內容（清單檢視、月曆下方清單共用）
+function fillListTbody(tbody, events, listTrips){
+  tbody.innerHTML = '';
   const visitNums = getVisitNumbers();
   const weekCounts = {}, weekTrips = {};
   events.forEach(ev=>{ const k = weekStartKey(ev.date); weekCounts[k] = (weekCounts[k]||0)+1; });
@@ -4006,7 +4016,9 @@ function findSessionByDataset(t){
 // Each tick is written straight to that one session row in the database
 // (not via the school-form saveData, which only ever saved a single school),
 // so every computer sees the same state after a reload / auto-refresh.
-$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+// 清單事件同時掛在「清單檢視」和「月曆下方清單」兩個容器上
+function onListBodies(type, fn){ ['#listTbody','#monthListBody'].forEach(sel=>{ const el=$(sel); if(el) el.addEventListener(type, fn); }); }
+onListBodies('click', (e)=>{
   const hr = e.target.closest('tr.week-header-row');
   if(!hr || !hr.dataset.week) return;
   const wk = hr.dataset.week;
@@ -4014,11 +4026,11 @@ $('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
   if(collapse) collapsedWeeks.add(wk); else collapsedWeeks.delete(wk);
   saveCollapsedWeeks();
   hr.classList.toggle('week-collapsed', collapse);
-  $$('#listTbody tr').forEach(r=>{
+  hr.closest('tbody').querySelectorAll('tr').forEach(r=>{
     if(r!==hr && r.dataset.week===wk && !r.classList.contains('week-header-row')) r.classList.toggle('week-row-hidden', collapse);
   });
 });
-$('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
+onListBodies('change', async (e)=>{
   const t = e.target;
   if(!t.matches) return;
 
@@ -4133,7 +4145,7 @@ $('#listTbody')&&$('#listTbody').addEventListener('change', async (e)=>{
 });
 
 // 待確認提醒：按「✕ 已確認」移除（直接寫回資料庫）
-$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+onListBodies('click', (e)=>{
   const btn = e.target.closest && e.target.closest('.check-note-clear');
   if(!btn) return;
   const session = findSessionByDataset(btn);
@@ -4153,12 +4165,12 @@ $('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
 });
 
 // 課程欄：點一下展開／收合完整內容
-$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+onListBodies('click', (e)=>{
   const full = e.target.closest('.lt-full');
   if(full) full.classList.toggle('open');
 });
 // Click-to-expand for truncated 授課內容 cells in the list view.
-$('#listTbody')&&$('#listTbody').addEventListener('click', (e)=>{
+onListBodies('click', (e)=>{
   const cell = e.target.closest('.content-cell.truncated');
   if(!cell) return;
   const expanded = cell.classList.toggle('expanded');
@@ -4190,7 +4202,7 @@ let markedSchools = [];
 let markOnly = false;
 const PLANNED_MARK = '__planned__';   // 特別標記：所有勾「訪視預計」的場次
 const PHOTO_MARK = '__photo10__';     // 特別標記：拍攝 10 校（已選滿 2 場的學校只標那 2 場）
-function photoMarkMatch(ev){ return isPhotoSchool(ev.schoolId) && (photoPickedCount(ev.schoolId) < PHOTO_PER_SCHOOL || isPhotoPicked(ev) || ev.photoStatus==='confirmed'); }
+function photoMarkMatch(ev){ return isPhotoSchool(ev.schoolId) && (photoPickedCount(ev.schoolId) < photoTargetOf(ev.schoolId) || isPhotoPicked(ev) || ev.photoStatus==='confirmed'); }
 try { markedSchools = JSON.parse(localStorage.getItem(MARKED_SCHOOLS_KEY) || '[]'); if(!Array.isArray(markedSchools)) markedSchools = []; } catch(e) { markedSchools = []; }
 function saveMarkedSchools(){ try { localStorage.setItem(MARKED_SCHOOLS_KEY, JSON.stringify(markedSchools)); } catch(e) {} }
 function markColorOf(id){
@@ -4220,11 +4232,11 @@ function renderMarkSchoolRow(){
   markedSchools.forEach(id=>{
     const m = markColorOf(id);
     const n = all.filter(ev=>markMatches(id, ev)).length;
-    const name = id === PLANNED_MARK ? '訪視預計' : id === PHOTO_MARK ? '📷 拍攝 10 校' : DATA.schools.find(s=>s.id===id).name;
+    const name = id === PLANNED_MARK ? '訪視預計' : id === PHOTO_MARK ? '📷 拍攝 11 校' : DATA.schools.find(s=>s.id===id).name;
     html += `<span class="mark-chip" style="--mk:${m.c};--mk-bg:${m.bg};">★ ${escapeHtml(name)}<span class="mk-count">${n}場</span><button type="button" data-unmark="${escapeHtml(id)}" title="取消標記">✕</button></span>`;
   });
   const plannedOpt = (markedSchools.includes(PLANNED_MARK) ? '' : `<option value="${PLANNED_MARK}">◇ 訪視預計（標出預計要去的場次）</option>`)
-    + ((PHOTO_MODE || markedSchools.includes(PHOTO_MARK)) ? '' : `<option value="${PHOTO_MARK}">📷 拍攝 10 校（選滿 2 場的只標那 2 場）</option>`);
+    + ((PHOTO_MODE || markedSchools.includes(PHOTO_MARK)) ? '' : `<option value="${PHOTO_MARK}">📷 拍攝 11 校（選滿的學校只標選好的場次）</option>`);
   const opts = DATA.schools.filter(s=>!markedSchools.includes(s.id))
     .map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.id.replace('school-',''))} ${escapeHtml(s.name)}</option>`).join('');
   html += `<select class="mark-select" id="markSchoolSelect"><option value="">＋ 選一間學校來標記</option>${plannedOpt}${opts}</select>`;
@@ -4536,34 +4548,11 @@ function renderMonthList(){
     return;
   }
 
-  const visitNums = getVisitNumbers();
-  const merged = events.concat(monthTrips.map(t=>Object.assign({ isTrip:true }, t)));
-  merged.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.isTrip?-1:0)-(b.isTrip?-1:0) || (a.startTime||'').localeCompare(b.startTime||''));
-  bodyEl.innerHTML = merged.map(ev=>{
-    if(ev.isTrip) return tripItemHTML(ev);
-    const catColor = schoolColor(ev.schoolName, ev.category).fg;
-    const flags = VISIT_FLAGS.filter(f=>ev[f.field]);
-    const order = getVisitOrderInfo(ev);
-    const visitNumTag = order ? `<span class="repeat-tag">第${order.visitNumber}次訪視</span>` : '';
-    const visitLine = (flags.length || visitNumTag)
-      ? `<div class="meta" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:3px;">${flags.map(f=>`<span style="display:inline-flex;align-items:center;gap:3px;color:${f.color};font-weight:700;"><span class="flag-dot" style="background:${f.color};"></span>${escapeHtml(f.label)}${(f.field==='visitCommittee' && ev.visitCommitteeName) ? '：'+escapeHtml(ev.visitCommitteeName) : ''}</span>`).join('')}${visitNumTag}</div>`
-      : '';
-    return `<div class="ev-item${evMark(ev)?' marked':''}"${markStyleAttr(ev)}>
-      <div class="ev-time">${fmtDateDisplay(ev.date)}<br>${ev.startTime||'–'}~${ev.endTime||'–'}</div>
-      <div class="ev-main">
-        ${visitDiamondHTML(ev.visitConfirmed ? visitNums[ev.sessionId] : 0)}${categoryTagHTML(ev.category)}<a href="/fill/${escapeHtml(ev.schoolId)}" target="_blank" rel="noopener" class="sname" style="color:${catColor}; text-decoration:none; border-bottom:1px dashed ${catColor};" title="點擊前往這所學校的填表頁面">${escapeHtml(ev.schoolName)}${PHOTO_MODE?'':' ↗'}</a>${chipPhotoHTML(ev)}
-        <div class="meta" style="margin-top:2px;">
-          <span style="color:var(--ink-soft);">隨課老師：</span>${escapeHtml(ev.companionTeacher||'（未填）')}
-          <span style="margin:0 4px;color:var(--ink-faint);">｜</span>
-          <span style="color:var(--ink-soft);">授課藝師：</span>${escapeHtml(ev.instructor||'（未填）')}
-          ${ev.location?`<span style="margin:0 4px;color:var(--ink-faint);">｜</span>${escapeHtml(ev.location)}`:''}
-        </div>
-        ${ev.content?`<div class="meta" style="margin-top:2px;"><span style="color:var(--ink-soft);">上課內容：</span>${escapeHtml(ev.content)}</div>`:''}
-        ${ev.checkNote?`<div class="check-note">⚠️ 待確認：${escapeHtml(ev.checkNote)}</div>`:''}
-        ${visitLine}
-      </div>
-    </div>`;
-  }).join('');
+  bodyEl.innerHTML = `<div class="table-wrap"><table class="list-table">
+      <colgroup><col class="c-when"><col class="c-school"><col class="c-people"><col class="c-course"><col class="c-place"><col class="c-visit"></colgroup>
+      <thead><tr><th>日期／時間</th><th>學校</th><th>藝師／隨課</th><th>課程</th><th>地點</th><th>訪視標記</th></tr></thead>
+      <tbody id="monthListTbody"></tbody></table></div>`;
+  fillListTbody($('#monthListTbody'), events, monthTrips);
 }
 
 
