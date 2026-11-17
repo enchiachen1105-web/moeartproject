@@ -787,6 +787,18 @@ input, select, textarea{min-width:0; max-width:100%;}
   .pp-check{position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:#1E8A4C; color:#fff; font-weight:900; font-size:14px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2.5px #fff, 0 2px 6px rgba(0,0,0,.2);}
   .pp-school.s-shot .pp-check{background:#FFC93C; color:#5A3E00;}
   .pp-check.sm{position:static; display:inline-flex; width:16px; height:16px; font-size:10px; box-shadow:none; vertical-align:-3px; margin-right:3px;}
+  .pp-num{display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; border-radius:50%; background:#F3E3D6; color:#7A3E14; font-size:11px; font-weight:800; margin-right:5px; vertical-align:1px;}
+  .pp-school.s-shot .pp-num{background:#fff; color:#1E8A4C;}
+  .pp-vnote{font-size:11px; color:#9A9BA3;}
+  .pp-school.s-shot .pp-vnote{color:#E6F5EC;}
+  .pp-vtitle{margin:14px 0 6px; font-size:13px; font-weight:800; color:var(--ink);}
+  .pp-videos{display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:6px;}
+  .pp-vitem{display:flex; align-items:center; gap:6px; border:1.5px solid #E2DDF5; background:#FAF9FF; border-radius:9px; padding:6px 9px; font-size:12.5px;}
+  .pp-vitem.done{border-color:#2F9E5E; background:#2F9E5E; color:#fff;}
+  .pp-vitem.done .pp-video{color:#fff !important;}
+  .pp-vn{display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; border-radius:50%; background:#E2DDF5; color:#5654A2; font-size:11px; font-weight:800;}
+  .pp-vitem.done .pp-vn{background:#fff; color:#1E8A4C;}
+  .pp-vl{flex:1; font-weight:700;}
   .pp-legend{margin-top:12px; font-size:12px; color:var(--ink-soft); display:flex; flex-wrap:wrap; align-items:center; gap:2px 6px;}
   .pp-legend .lg{display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:3px; box-sizing:border-box;}
   .lg-picked{border:2px solid #5B8DEF; background:#F3F7FF;} .lg-confirmed{border:2px solid #2F9E5E; background:#fff;} .lg-shot{background:#2F9E5E;}
@@ -2992,8 +3004,10 @@ async function _commitSaveSchoolInner(school){
 /* ---------------- 攝影團隊頁（/photo）＋拍攝確定／拍攝無法 ---------------- */
 const PHOTO_MODE = !SCHOOL_ID && /^\/photo/.test(location.pathname);
 // 115學年度拍攝的 10 間學校（攝影團隊頁只顯示這 10 校）
-const PHOTO_SCHOOL_IDS = ['school-01','school-04','school-13','school-16','school-20','school-21','school-25','school-29','school-30','school-31','school-32'];   // 1117：加羅東國小   // 1109：林園國小改成大觀國小
-const PHOTO_TARGET = 20;   // 本學年需要攝影團隊跟拍的總次數（9 校 × 2 次＋力行、羅東各 1 次）
+// 順序＝計畫編號 1～11：1大觀 2瑞豐 3崇明 4五福 5國風 6新生 7忠孝 8鹿江 9力行 10中教大實小 11羅東
+const PHOTO_SCHOOL_IDS = ['school-01','school-04','school-13','school-16','school-20','school-21','school-25','school-29','school-30','school-32','school-31'];   // 1117：加羅東國小   // 1109：林園國小改成大觀國小
+// 本學年需要攝影團隊跟拍的總次數（8 校 × 2 次＋鹿江、力行、羅東各 1 次＝19）——在 PHOTO_TARGET_BY_SCHOOL 定義後計算
+let PHOTO_TARGET = 0;
 function renderPhotoCount(){
   const el = document.getElementById('photoCountStat');
   if(!el) return;
@@ -3008,10 +3022,28 @@ function isPhotoSchool(id){ return PHOTO_SCHOOL_IDS.includes(id); }
 /* ---------- 拍攝與影片進度（攝影頁、總覽頁共用） ---------- */
 const PHOTO_SHORT = {'school-04':'瑞豐國小','school-13':'崇明國中','school-01':'大觀國小','school-16':'五福國小','school-20':'國風國中',
   'school-21':'新生國小','school-25':'忠孝國小','school-29':'鹿江國中小','school-30':'力行國小','school-31':'羅東國小','school-32':'中教大實小'};
-const PHOTO_PER_SCHOOL = 2, VIDEO_TARGET = PHOTO_SCHOOL_IDS.length + 1;   // 每校影片 1 支＋全計畫精華 1 支
-// 每校拍攝場數（預設 2 場；1117：力行、羅東各 1 場）
-const PHOTO_TARGET_BY_SCHOOL = {'school-30':1, 'school-31':1};
+const PHOTO_PER_SCHOOL = 2;
+// 每校拍攝場數（預設 2 場＝上、下學期各 1；1117：鹿江、力行、羅東各 1 場）
+const PHOTO_TARGET_BY_SCHOOL = {'school-29':1, 'school-30':1, 'school-31':1};
+// 影片規劃（1117）：1～6 校各 1 支、1～6 精華、7＋10 跨域合剪、8＋9＋11 合剪、7～11 精華、1 月預告片＝11 支
+const VIDEO_ITEMS = [
+  {key:'school-01', label:'大觀國小', schools:['school-01']},
+  {key:'school-04', label:'瑞豐國小', schools:['school-04']},
+  {key:'school-13', label:'崇明國中', schools:['school-13']},
+  {key:'school-16', label:'五福國小', schools:['school-16']},
+  {key:'school-20', label:'國風國中', schools:['school-20']},
+  {key:'school-21', label:'新生國小', schools:['school-21']},
+  {key:'hl-1-6',   label:'✨ 精華（1～6 校）', schools:[]},
+  {key:'mix-7-10', label:'忠孝＋中教大實小（跨域）', schools:['school-25','school-32']},
+  {key:'mix-8-9-11', label:'鹿江＋力行＋羅東', schools:['school-29','school-30','school-31']},
+  {key:'hl-7-11',  label:'✨ 精華（7～11 校）', schools:[]},
+  {key:'trailer',  label:'🎞 預告片', schools:[]}
+];
+const VIDEO_TARGET = VIDEO_ITEMS.length;
+function videoDone(key){ return !!(DATA.videoFlags||{})[key]; }
+function videoOfSchool(id){ return VIDEO_ITEMS.find(v=>v.schools.includes(id)); }
 function photoTargetOf(id){ return PHOTO_TARGET_BY_SCHOOL[id] || PHOTO_PER_SCHOOL; }
+PHOTO_TARGET = PHOTO_SCHOOL_IDS.reduce((a,id)=>a+photoTargetOf(id), 0);
 let showHiddenPhoto = false;
 function photoConfirmedCount(schoolId){
   const sc = DATA.schools.find(s=>s.id===schoolId);
@@ -3039,7 +3071,7 @@ function photoHidden(ev){
 function photoStats(){
   let conf=0, done=0;
   DATA.schools.forEach(sc=>{ if(!isPhotoSchool(sc.id)) return; (sc.sessions||[]).forEach(x=>{ if(x.photoStatus==='confirmed'){ conf++; if(x.photoDone) done++; } }); });
-  const videos = DATA.schools.filter(sc=>isPhotoSchool(sc.id) && sc.videoDone).length + (DATA.highlightDone ? 1 : 0);
+  const videos = VIDEO_ITEMS.filter(v=>videoDone(v.key)).length;
   return {conf, done, videos};
 }
 function renderPhotoPanel(){
@@ -3057,21 +3089,24 @@ function renderPhotoPanel(){
     const picked = photoPickedCount(id);
     const tgt = photoTargetOf(id);
     const full = picked >= tgt;
-    const vchk = PHOTO_MODE ? (sc.videoDone ? '<span class="pp-video on">🎬 影片完成</span>' : '<span class="pp-video">🎬 影片未完成</span>')
-      : `<label class="pp-video ${sc.videoDone?'on':''}"><input type="checkbox" class="pp-video-chk" data-school-id="${id}" ${sc.videoDone?'checked':''}>🎬 影片完成</label>`;
+    const vItem = videoOfSchool(id), vDone = vItem && videoDone(vItem.key);
+    const num = PHOTO_SCHOOL_IDS.indexOf(id) + 1;
     // 階段：已選滿 2 堂＝藍框 → 確定 2 堂＝綠框 → 拍攝完成 2 堂＝整張綠底；影片完成＝右上角打勾
     const stage = d >= tgt ? 's-shot' : c.length >= tgt ? 's-confirmed' : full ? 's-picked' : '';
-    html += `<div class="pp-school ${stage} ${sc.videoDone?'s-video':''} ${curSchool===sc.name?'active':''}" data-name="${escapeHtml(sc.name)}">
-      ${sc.videoDone?'<span class="pp-check" title="影片完成">✓</span>':''}
-      <div class="pp-name">${escapeHtml(PHOTO_SHORT[id]||sc.name)}</div>
-      <div class="pp-nums">已選 <b>${picked}/${tgt}</b>・確定 <b>${c.length}</b>・完成 <b>${d}</b></div>${vchk}</div>`;
+    html += `<div class="pp-school ${stage} ${vDone?'s-video':''} ${curSchool===sc.name?'active':''}" data-name="${escapeHtml(sc.name)}">
+      ${vDone?'<span class="pp-check" title="影片完成">✓</span>':''}
+      <div class="pp-name"><span class="pp-num">${num}</span>${escapeHtml(PHOTO_SHORT[id]||sc.name)}</div>
+      <div class="pp-nums">拍 <b>${tgt}</b> 場・已選 <b>${picked}/${tgt}</b>・確定 <b>${c.length}</b>・完成 <b>${d}</b></div>
+      <div class="pp-vnote">🎬 ${escapeHtml(vItem ? (vItem.schools.length>1 ? '合剪：'+vItem.label : '單獨一支') : '')}</div></div>`;
   });
-  html += `<div class="pp-school pp-highlight ${DATA.highlightDone?'s-video':''}">${DATA.highlightDone?'<span class="pp-check" title="影片完成">✓</span>':''}
-      <div class="pp-name">✨ 全計畫精華</div><div class="pp-nums">第 ${VIDEO_TARGET} 支影片</div>
-      ${PHOTO_MODE ? (DATA.highlightDone?'<span class="pp-video on">🎬 影片完成</span>':'<span class="pp-video">🎬 影片未完成</span>')
-        : `<label class="pp-video ${DATA.highlightDone?'on':''}"><input type="checkbox" class="pp-highlight-chk" ${DATA.highlightDone?'checked':''}>🎬 影片完成</label>`}</div>`;
   html += `</div>`;
-  html += `<div class="pp-legend"><span class="lg lg-picked"></span>已選好 2 堂　<span class="lg lg-confirmed"></span>攝影團隊確定 2 堂　<span class="lg lg-shot"></span>2 堂都拍攝完成　<span class="pp-check sm">✓</span>影片完成</div>`;
+  html += `<div class="pp-vtitle">🎬 影片製作（${VIDEO_TARGET} 支）</div><div class="pp-videos">` + VIDEO_ITEMS.map((v,i)=>{
+    const done = videoDone(v.key);
+    const ctl = PHOTO_MODE ? `<span class="pp-video ${done?'on':''}">${done?'✓ 已完成':'未完成'}</span>`
+      : `<label class="pp-video ${done?'on':''}"><input type="checkbox" class="pp-vitem-chk" data-vkey="${v.key}" ${done?'checked':''}>完成</label>`;
+    return `<div class="pp-vitem ${done?'done':''}"><span class="pp-vn">${i+1}</span><span class="pp-vl">${escapeHtml(v.label)}</span>${ctl}</div>`;
+  }).join('') + `</div>`;
+  html += `<div class="pp-legend"><span class="lg lg-picked"></span>已選滿應拍場數　<span class="lg lg-confirmed"></span>攝影團隊全部確定　<span class="lg lg-shot"></span>全部拍攝完成　<span class="pp-check sm">✓</span>這間學校的影片完成</div>`;
   if(PHOTO_MODE || photoSchoolsOnly){
     const nHidden = getAllEvents().filter(ev=>matchesBaseFilter(ev) && photoHidden(ev)).length;
     html += `<div class="pp-foot">${PHOTO_MODE?'':'📷 拍攝 11 校篩選中：'}一間學校排滿應拍場數（計畫端勾「攝影預計」或攝影團隊勾「拍攝確定」）後，其他課會自動隱藏${PHOTO_MODE?'；已經過去的日期也會隱藏':''}。<button type="button" class="btn btn-ghost btn-sm" id="ppShowHidden">${showHiddenPhoto?'✓ 顯示隱藏的課程':'顯示隱藏的課程'}（${nHidden} 堂）</button>${curSchool?` <button type="button" class="btn btn-ghost btn-sm" id="ppClearSchool">看全部 11 校</button>`:''}</div>`;
@@ -3086,18 +3121,13 @@ function renderPhotoPanel(){
   }));
   const sh = el.querySelector('#ppShowHidden'); if(sh) sh.addEventListener('click', ()=>{ showHiddenPhoto = !showHiddenPhoto; renderAdmin(); });
   const cs = el.querySelector('#ppClearSchool'); if(cs) cs.addEventListener('click', ()=>{ $('#schoolNameFilter').value=''; renderAdmin(); });
-  el.querySelectorAll('.pp-video-chk').forEach(chk=>chk.addEventListener('change', async ()=>{
-    const sc = DATA.schools.find(s=>s.id===chk.dataset.schoolId); if(!sc) return;
-    const prev = !!sc.videoDone; sc.videoDone = chk.checked; renderPhotoPanel();
-    try{ await sbFetch(`/schools?id=eq.${sc.id}`, {method:'PATCH', body: JSON.stringify({video_done: chk.checked})}); showToast('✓ 影片進度已儲存'); }
-    catch(err){ sc.videoDone = prev; renderPhotoPanel(); showToast('⚠️ 儲存失敗（請確認已執行 41 號 SQL）：'+err.message); }
+  el.querySelectorAll('.pp-vitem-chk').forEach(chk=>chk.addEventListener('change', async ()=>{
+    const key = chk.dataset.vkey;
+    DATA.videoFlags = DATA.videoFlags || {};
+    const prev = !!DATA.videoFlags[key]; DATA.videoFlags[key] = chk.checked; renderPhotoPanel();
+    try{ await sbFetch('/project_flags', {method:'POST', headers:{'Prefer':'resolution=merge-duplicates'}, body: JSON.stringify([{key:'video:'+key, value: chk.checked}])}); showToast('✓ 影片進度已儲存'); }
+    catch(err){ DATA.videoFlags[key] = prev; renderPhotoPanel(); showToast('⚠️ 儲存失敗（請確認已執行 41 號 SQL）：'+err.message); }
   }));
-  const hc = el.querySelector('.pp-highlight-chk');
-  if(hc) hc.addEventListener('change', async ()=>{
-    const prev = !!DATA.highlightDone; DATA.highlightDone = hc.checked; renderPhotoPanel();
-    try{ await sbFetch('/project_flags', {method:'POST', headers:{'Prefer':'resolution=merge-duplicates'}, body: JSON.stringify([{key:'highlight_video_done', value: hc.checked}])}); showToast('✓ 精華影片進度已儲存'); }
-    catch(err){ DATA.highlightDone = prev; renderPhotoPanel(); showToast('⚠️ 儲存失敗（請確認已執行 41 號 SQL）：'+err.message); }
-  });
 }
 
 function photoBoxHTML(ev){
@@ -3158,7 +3188,7 @@ if(PHOTO_MODE){
     <p class="help-text" style="margin:0; line-height:1.8;">這裡只列出要拍攝的 11 間學校課程。訪視標記（訪視預計、訪視確定、素瑜、恩嘉、委員）由計畫端填寫，只能查看。<br>
     <b style="color:#B4561F;">橘色框</b>＝計畫端希望拍攝的場次：可以拍就勾 <b style="color:#1E8A4C;">拍攝確定</b>，再填攝影師姓名、聯絡電話、集合時間和集合地點；不能拍就勾 <b style="color:#C0392B;">拍攝無法</b>。<br>
     <b style="color:#9A9BA3;">灰色框</b>＝目前沒有排拍攝的場次，如果那天沒辦法拍，可以先勾「拍攝無法」。<br>
-    每間學校拍 <b>2 場</b>（力行、羅東各 <b>1 場</b>）：計畫端已經選好（橘色框）或你們已確定滿應拍場數後，那間的其他課會自動隱藏；已經過去的日期也會隱藏。填寫的內容會即時同步給計畫端。</p>`;
+    每間學校拍 <b>2 場</b>（上、下學期各 1 場；鹿江、力行、羅東各 <b>1 場</b>）：計畫端已經選好（橘色框）或你們已確定滿應拍場數後，那間的其他課會自動隱藏；已經過去的日期也會隱藏。填寫的內容會即時同步給計畫端。</p>`;
   const content = document.querySelector('#content');
   if(content) content.insertBefore(help, content.firstChild);
 }
@@ -4866,7 +4896,9 @@ async function loadData(){
     try{
       const flags = await sbFetch('/project_flags?select=*');
       DATA.highlightDone = !!((flags||[]).find(x=>x.key==='highlight_video_done')||{}).value;
-    }catch(e){ DATA.highlightDone = false; }
+      DATA.videoFlags = {};
+      (flags||[]).forEach(x=>{ if(String(x.key).startsWith('video:')) DATA.videoFlags[x.key.slice(6)] = !!x.value; });
+    }catch(e){ DATA.highlightDone = false; DATA.videoFlags = {}; }
     if(PHOTO_MODE){ DATA.schools = DATA.schools.filter(sc=>isPhotoSchool(sc.id)); DATA.changeLog = []; DATA.trips = []; return; }
     try{
       const logs = await getChangeLogs(false);
@@ -4942,7 +4974,7 @@ async function saveData(){
 let _adminLoadedAt = Date.now();
 let _adminReloading = false;
 let _adminDataSig = '';
-function adminDataSig(){ return JSON.stringify([DATA.schools, DATA.changeLog, DATA.trips, DATA.highlightDone]); }
+function adminDataSig(){ return JSON.stringify([DATA.schools, DATA.changeLog, DATA.trips, DATA.highlightDone, DATA.videoFlags]); }
 async function reloadAdminData(manual){
   if(_adminReloading) return;
   _adminReloading = true;
